@@ -1,42 +1,38 @@
-FROM python:3.14
+# Kage 🖤 userbot
+# Code lives in the image (/app), your session, config and modules in the /data volume.
+FROM python:3.13-slim-bookworm
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_DEFAULT_TIMEOUT=100 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DOCKER=true \
-    GIT_PYTHON_REFRESH=quiet
+    GIT_PYTHON_REFRESH=quiet \
+    VIRTUAL_ENV=/opt/venv \
+    PATH=/opt/venv/bin:$PATH
 
+# Runtime libs used by popular modules (media, images, file types) + build tools for their wheels
 RUN apt-get update && apt-get install --no-install-recommends -y \
-    build-essential \
-    curl \
-    ffmpeg \
-    gcc \
-    git \
-    libavcodec-dev \
-    libavdevice-dev \
-    libavformat-dev \
-    libavutil-dev \
-    libcairo2 \
-    libmagic1 \
-    libswscale-dev \
-    openssh-server \
-    xfonts-75dpi \
-    xfonts-base \
-    && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install --no-install-recommends -y nodejs \
-    && apt-get clean \
+        build-essential \
+        ffmpeg \
+        git \
+        libcairo2 \
+        libmagic1 \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-WORKDIR /data
-RUN mkdir /data/private
+# Unprivileged user; the venv is theirs so modules can `# requires:` extra packages at runtime
+RUN useradd --create-home --uid 1000 kage \
+    && python -m venv /opt/venv \
+    && mkdir -p /data /app \
+    && chown -R kage:kage /opt/venv /data /app
 
-RUN git clone https://github.com/coddrago/Heroku /data/Heroku
+USER kage
+WORKDIR /app
 
-WORKDIR /data/Heroku
+COPY --chown=kage:kage requirements.txt .
+RUN pip install --no-cache-dir --no-warn-script-location -r requirements.txt
 
-ARG HEROKU_REF=master
-RUN git fetch origin "${HEROKU_REF}" && git checkout "${HEROKU_REF}" && git pull origin "${HEROKU_REF}"
+COPY --chown=kage:kage . .
 
-RUN pip install --no-cache-dir --no-warn-script-location --disable-pip-version-check --upgrade -r requirements.txt
-
-CMD ["python", "-m", "heroku", "--root"]
+VOLUME ["/data"]
+CMD ["python", "-m", "kage"]

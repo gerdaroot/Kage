@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Heroku"
-MODULE_NAME="heroku"
-REPO_URL="${HEROKU_REPO_URL:-https://github.com/coddrago/Heroku.git}"
-VENV_DIR="${HEROKU_VENV_DIR:-.venv}"
-LOG_FILE="heroku-install.log"
+APP_NAME="Kage"
+MODULE_NAME="kage"
+REPO_URL="${KAGE_REPO_URL:-https://github.com/gerdaroot/Kage.git}"
+VENV_DIR="${KAGE_VENV_DIR:-.venv}"
+LOG_FILE="kage-install.log"
 
 if [ "${SUDO_USER:-}" != "" ] && command -v sudo >/dev/null 2>&1; then
 	RUN_AS_USER=(sudo -u "$SUDO_USER")

@@ -1,10 +1,12 @@
 services:
-  worker:
-    container_name: heroku_ub
+  kage:
+    # Prebuilt image from GitHub; to build from this checkout instead, run: docker compose up -d --build
+    image: ghcr.io/gerdaroot/kage:latest
     build:
       context: .
+    container_name: kage
     volumes:
-      - worker:/data
+      - kage-data:/data
     stop_signal: SIGINT
     restart: unless-stopped
     stdin_open: true
@@ -12,4 +14,4 @@ services:
     init: true
 
 volumes:
-  worker:
+  kage-data:

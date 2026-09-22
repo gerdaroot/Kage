@@ -134,11 +134,11 @@ dmypy.json
 
 *__pycache__
 *.pyc
-heroku/api_token.py
-heroku/loaded_modules
+kage/api_token.py
+kage/loaded_modules
 loaded_modules
-heroku/debug_modules
-heroku*.session*
+kage/debug_modules
+kage*.session*
 sessions
 database-*.json
 *.swp
@@ -166,12 +166,14 @@ config.json
 *.mp3
 *.avi
 
-# Heroku-specific rules
-.heroku/
+# Kage-specific rules
+.kage/
 .apt/
 .profile.d/
 vendor/
 Pipfile.lock
 
-heroku.log.*
+kage.log.*
 unknown_errors.txt
+# Kage dev tooling
+.kage/node_modules
