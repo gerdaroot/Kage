@@ -12,6 +12,7 @@
 
 import asyncio
 import logging
+from pathlib import Path
 import os
 import random
 import re
@@ -28,6 +29,9 @@ if typing.TYPE_CHECKING:
     from ..inline.core import InlineManager
 
 logger = logging.getLogger(__name__)
+
+# Shipped with the code (/app/assets in Docker) — not in the data dir, not fetched from GitHub
+BOT_AVATAR = Path(__file__).resolve().parents[2] / "assets" / "img" / "avatar.png"
 BOT_BASE_PATTERN = re.compile(r"(\w*)_[0-9a-zA-Z]{6}_bot")
 
 
@@ -89,14 +93,7 @@ class TokenObtainment(InlineUnit):
                 await fw_protect()
                 from .. import main
 
-                if "DOCKER" in os.environ:
-                    m = await conv.send_file(
-                        "https://raw.githubusercontent.com/gerdaroot/Kage/master/assets/img/avatar.png"
-                    )
-                else:
-                    m = await conv.send_file(
-                        main.BASE_PATH / "assets" / "img" / "avatar.png"
-                    )
+                m = await conv.send_file(BOT_AVATAR)
                 r = await conv.get_response()
 
                 logger.debug(">> <Photo>")
@@ -245,9 +242,7 @@ class TokenObtainment(InlineUnit):
                         await fw_protect()
                         from .. import main
 
-                        m = await conv.send_file(
-                            main.BASE_PATH / "assets" / "img" / "avatar.png"
-                        )
+                        m = await conv.send_file(BOT_AVATAR)
                         r = await conv.get_response()
 
                         logger.debug(">> <Photo>")

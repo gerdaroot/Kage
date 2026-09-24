@@ -28,7 +28,7 @@ except ImportError as e:
 
 import typing
 
-from herokutl.tl.types import Message, User
+from herokutl.tl.types import ChannelForbidden, Message, User
 
 from . import main, utils
 from .pointers import (
@@ -128,6 +128,9 @@ class Database(dict):
         if existing_channel_id:
             try:
                 content_channel = await self._client.get_entity(existing_channel_id)
+                # a deleted/left channel still resolves from cache as ChannelForbidden or left=True
+                if isinstance(content_channel, ChannelForbidden) or getattr(content_channel, "left", False):
+                    raise ValueError("channel was deleted or left")
                 logger.debug(
                     "Found existing content channel with ID %s in database",
                     existing_channel_id,
