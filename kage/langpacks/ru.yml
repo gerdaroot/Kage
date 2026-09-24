@@ -571,7 +571,7 @@ kage_info:
   font_installed: "<tg-emoji emoji-id=5436040291507247633>🎉</tg-emoji> <b>Шрифт установлен!</b>\n<tg-emoji emoji-id=5436040291507247633>🎉</tg-emoji> <i>Теперь вы с удовольствием можете пользоваться им.</i>"
   incorrect_format_font: "<tg-emoji emoji-id=5465665476971471368>❌</tg-emoji> <b>Неверный формат шрифта!</b>\n<blockquote>Поддерживаемые форматы -> otf, ttf</blockquote>"
   incorrect_img_format: "<tg-emoji emoji-id=5465665476971471368>❌</tg-emoji> <b>Неверный формат изображения</b>\n<blockquote>Поддерживаемые форматы -> jpg, jpeg, png, bmp, webp</blockquote>"
-  _cmd_doc_ubinfo: "Отправить информацию по типу 'Что такое Хероку?'"
+  _cmd_doc_ubinfo: "Отправить информацию по типу 'Что такое Kage?'"
   _cmd_doc_info: "Отправляет информацию о боте"
   _cmd_doc_setinfo: "<текст> - Изменить текст в .info"
 

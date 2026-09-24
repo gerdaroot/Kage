@@ -5,13 +5,17 @@ APP_NAME="Kage"
 MODULE_NAME="kage"
 REPO_URL="${KAGE_REPO_URL:-https://github.com/gerdaroot/Kage.git}"
 VENV_DIR="${KAGE_VENV_DIR:-.venv}"
-LOG_FILE="kage-install.log"
+# absolute: the script later cd's into the cloned repo
+LOG_FILE="$PWD/kage-install.log"
 
-if [ "${SUDO_USER:-}" != "" ] && command -v sudo >/dev/null 2>&1; then
-	RUN_AS_USER=(sudo -u "$SUDO_USER")
-else
-	RUN_AS_USER=()
-fi
+# a function, not an array: "${empty[@]}" under `set -u` aborts on bash < 4.4 (macOS)
+as_user() {
+	if [ "${SUDO_USER:-}" != "" ] && command -v sudo >/dev/null 2>&1; then
+		sudo -u "$SUDO_USER" "$@"
+	else
+		"$@"
+	fi
+}
 
 info() {
 	printf "\033[0;34m%s\033[0m\n" "$1"
@@ -135,8 +139,10 @@ prepare_repo() {
 	fi
 
 	info "Cloning repo..."
-	rm -rf "$APP_NAME"
-	"${RUN_AS_USER[@]}" git clone "$REPO_URL" "$APP_NAME" >>"$LOG_FILE" 2>&1 || fail "Clone failed." 3
+	if [ -e "$APP_NAME" ]; then
+		fail "./$APP_NAME already exists and is not a Kage checkout. Move it away and run again." 3
+	fi
+	as_user git clone "$REPO_URL" "$APP_NAME" >>"$LOG_FILE" 2>&1 || fail "Clone failed." 3
 	cd "$APP_NAME"
 }
 
@@ -144,24 +150,24 @@ create_venv() {
 	local py="$1"
 
 	info "Creating virtual environment..."
-	"${RUN_AS_USER[@]}" "$py" -m venv "$VENV_DIR" >>"$LOG_FILE" 2>&1 || fail "Virtual environment creation failed." 4
+	as_user "$py" -m venv "$VENV_DIR" >>"$LOG_FILE" 2>&1 || fail "Virtual environment creation failed." 4
 }
 
 install_python_packages() {
 	local venv_python="$VENV_DIR/bin/python"
 
 	info "Installing Python dependencies..."
-	"${RUN_AS_USER[@]}" "$venv_python" -m pip install --upgrade pip setuptools wheel >>"$LOG_FILE" 2>&1 || fail "Pip upgrade failed." 4
-	"${RUN_AS_USER[@]}" "$venv_python" -m pip install --upgrade -r requirements.txt --disable-pip-version-check >>"$LOG_FILE" 2>&1 || fail "Requirements installation failed." 4
+	as_user "$venv_python" -m pip install --upgrade pip setuptools wheel >>"$LOG_FILE" 2>&1 || fail "Pip upgrade failed." 4
+	as_user "$venv_python" -m pip install --upgrade -r requirements.txt --disable-pip-version-check >>"$LOG_FILE" 2>&1 || fail "Requirements installation failed." 4
 }
 
 start_app() {
 	info "Starting..."
-	"${RUN_AS_USER[@]}" "$VENV_DIR/bin/python" -m "$MODULE_NAME" "$@"
+	as_user "$VENV_DIR/bin/python" -m "$MODULE_NAME" "$@"
 }
 
 clear || true
-cat assets/download.txt
+[ -f assets/download.txt ] && cat assets/download.txt
 printf "\033[3;34;40m Installing %s...\033[0m\n\n" "$APP_NAME"
 
 : >"$LOG_FILE"

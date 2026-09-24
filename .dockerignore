@@ -178,6 +178,10 @@ unknown_errors.txt
 
 *.sock
 
-# Kage: images shipped in the repo must reach the image
+# images shipped in the repo must reach the image
 !assets/**
-.kage/
+sessions/
+**/*.session
+**/*.session-journal
+**/config-*.json
+**/database-*.json

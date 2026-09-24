@@ -52,7 +52,7 @@ def restart():
 
     if "KAGE_DO_NOT_RESTART2" in os.environ:
         print(
-            "KageTL version 1.0.2 or higher is required, use `pip install heroku-tl-new -U` for update."
+            "HerokuTL version 1.0.2 or higher is required, use `pip install heroku-tl-new -U` for update."
         )
         sys.exit(0)
 

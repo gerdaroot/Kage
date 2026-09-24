@@ -448,7 +448,12 @@ class LoaderMod(loader.Module):
                 )
 
             try:
-                r = await self._storage.fetch(url, auth=self.config["basic_auth"])
+                r = await self._storage.fetch(
+                    url,
+                    auth=self.config["basic_auth"],
+                    # no message = reloading saved modules on start; .dlm always downloads fresh
+                    prefer_local=message is None,
+                )
             except requests.exceptions.HTTPError as e:
                 logger.warning(
                     "Failed to download module %s from %s: %s",

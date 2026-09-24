@@ -48,6 +48,8 @@ from .inline.types import (
     BotInlineMessage,
     BotMessage,
     KageReplyMarkup,
+    HerokuReplyMarkup,
+    HikkaReplyMarkup,
     InlineCall,
     InlineMessage,
     InlineQuery,
@@ -61,6 +63,8 @@ if typing.TYPE_CHECKING:
 __all__ = [
     "JSONSerializable",
     "KageReplyMarkup",
+    "HerokuReplyMarkup",
+    "HikkaReplyMarkup",
     "ListLike",
     "Command",
     "StringLoader",
@@ -257,6 +261,12 @@ class Module:
     @kage_watchers.setter
     def kage_watchers(self, _):
         pass
+
+    # Names used by modules written for Heroku / Hikka
+    heroku_commands = hikka_commands = kage_commands
+    heroku_inline_handlers = hikka_inline_handlers = kage_inline_handlers
+    heroku_callback_handlers = hikka_callback_handlers = kage_callback_handlers
+    heroku_watchers = hikka_watchers = kage_watchers
 
     async def animate(
         self,

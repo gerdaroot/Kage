@@ -34,7 +34,9 @@ class LocalStorage:
     """Saves modules to disk and fetches them if remote storage is not available."""
 
     def __init__(self):
-        self._path = os.path.join(os.path.expanduser("~"), ".kage", "modules_cache")
+        # in Docker the home dir is wiped with the container; /data is the persistent volume
+        root = "/data" if "DOCKER" in os.environ else os.path.expanduser("~")
+        self._path = os.path.join(root, ".kage", "modules_cache")
         self._tracked_total_size: int | None = None
         self._ensure_dirs()
 
@@ -149,14 +151,24 @@ class RemoteStorage:
 
         return url, repo, module_name
 
-    async def fetch(self, url: str, auth: str | None = None) -> str:
+    async def fetch(
+        self,
+        url: str,
+        auth: str | None = None,
+        prefer_local: bool = False,
+    ) -> str:
         """
         Fetches the module from the remote storage.
         :param url: URL to the module.
         :param auth: Optional authentication string in the format "username:password".
+        :param prefer_local: Use the cached copy when there is one (restarts), so a changed
+            remote file can't silently run new code on the account
         :return: Module source code.
         """
         url, repo, module_name = self._parse_url(url)
+        if prefer_local and (module := self._local_storage.fetch(repo, module_name)):
+            return module
+
         try:
             r = await utils.run_sync(
                 requests.get,

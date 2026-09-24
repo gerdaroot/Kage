@@ -12,11 +12,10 @@
 
 import asyncio
 import logging
-from pathlib import Path
-import os
 import random
 import re
 import typing
+from pathlib import Path
 
 from herokutl.errors.rpcerrorlist import YouBlockedUserError
 from herokutl.tl.functions.contacts import UnblockRequest
@@ -30,7 +29,7 @@ if typing.TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Shipped with the code (/app/assets in Docker) — not in the data dir, not fetched from GitHub
+# Lives next to the code (/app in Docker), not in the data dir
 BOT_AVATAR = Path(__file__).resolve().parents[2] / "assets" / "img" / "avatar.png"
 BOT_BASE_PATTERN = re.compile(r"(\w*)_[0-9a-zA-Z]{6}_bot")
 
@@ -91,8 +90,6 @@ class TokenObtainment(InlineUnit):
 
             try:
                 await fw_protect()
-                from .. import main
-
                 m = await conv.send_file(BOT_AVATAR)
                 r = await conv.get_response()
 
@@ -240,8 +237,6 @@ class TokenObtainment(InlineUnit):
 
                     try:
                         await fw_protect()
-                        from .. import main
-
                         m = await conv.send_file(BOT_AVATAR)
                         r = await conv.get_response()
 

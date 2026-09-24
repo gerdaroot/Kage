@@ -484,8 +484,12 @@ async def set_avatar(
     if isinstance(avatar, str) and check_url(avatar):
         response = await run_sync(requests.get, avatar)
         # a 404 page uploaded as a photo crashes startup with PhotoCropSizeSmallError
-        if not response.ok or not response.headers.get("content-type", "").startswith("image/"):
-            logger.warning("Avatar %s is unavailable (%s), skipping", avatar, response.status_code)
+        if not response.ok or not response.headers.get(
+            "content-type", ""
+        ).startswith("image/"):
+            logger.warning(
+                "Avatar %s is unavailable (%s), skipping", avatar, response.status_code
+            )
             return False
         f = response.content
     elif isinstance(avatar, bytes):

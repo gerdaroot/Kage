@@ -28,6 +28,7 @@ except ImportError as e:
 
 import typing
 
+from herokutl.tl.functions.channels import EditTitleRequest
 from herokutl.tl.types import ChannelForbidden, Message, User
 
 from . import main, utils
@@ -53,6 +54,27 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
+
+_LEGACY_PREFIX = re.compile(r"(hikka\.|heroku\.|legacy\.)(\S+\":)")
+_LEGACY_CORE_MOD = re.compile(
+    r'"(?:Hikka|Heroku)(Info|Security|Backup|Config|Settings|Web|Accounts)Mod"'
+)
+
+
+def _kage_owner(owner):
+    """Modules written for Heroku/Hikka still address core keys as heroku.main, hikka.inline..."""
+    if isinstance(owner, str) and owner.startswith(("heroku.", "hikka.")):
+        return "kage." + owner.split(".", 1)[1]
+    return owner
+
+
+def migrate_legacy_db(text: str) -> str:
+    """Rewrite a Hikka/Heroku database (JSON text) to Kage names:
+    core keys (hikka./heroku./legacy. -> kage.), renamed core modules' storage
+    (HerokuInfoMod -> KageInfoMod) and the log channel topics cache."""
+    text = _LEGACY_PREFIX.sub(lambda m: "kage." + m.group(2), text)
+    text = _LEGACY_CORE_MOD.sub(lambda m: f'"Kage{m.group(1)}Mod"', text)
+    return text.replace('"heroku-userbot"', '"kage-userbot"')
 
 
 class NoAssetsChannel(Exception):
@@ -129,8 +151,20 @@ class Database(dict):
             try:
                 content_channel = await self._client.get_entity(existing_channel_id)
                 # a deleted/left channel still resolves from cache as ChannelForbidden or left=True
-                if isinstance(content_channel, ChannelForbidden) or getattr(content_channel, "left", False):
+                if isinstance(content_channel, ChannelForbidden) or getattr(
+                    content_channel, "left", False
+                ):
                     raise ValueError("channel was deleted or left")
+                if getattr(content_channel, "title", "") in (
+                    "heroku-userbot",
+                    "hikka-userbot",
+                ):
+                    # topics are cached under the channel title, so the inherited channel is renamed
+                    await self._client(EditTitleRequest(content_channel, "kage-userbot"))
+                    # force: the entity cache still holds the old title for 5 minutes
+                    content_channel = await self._client.get_entity(
+                        existing_channel_id, force=True
+                    )
                 logger.debug(
                     "Found existing content channel with ID %s in database",
                     existing_channel_id,
@@ -176,9 +210,11 @@ class Database(dict):
             try:
                 self._update_from_read(
                     json.loads(
-                        self._redis.get(
-                            str(self._client.tg_id),
-                        ).decode(),
+                        migrate_legacy_db(
+                            self._redis.get(
+                                str(self._client.tg_id),
+                            ).decode(),
+                        ),
                     ),
                 )
             except Exception:
@@ -187,16 +223,10 @@ class Database(dict):
 
         try:
             db = self._db_file.read_text()
-            if re.search(r'"(hikka\.)(\S+\":)', db):
-                logging.warning("Converting db after update")
-                db = re.sub(r"(hikka\.)(\S+\":)", lambda m: "kage." + m.group(2), db)
-            # Heroku/Hikka/Legacy databases carry over to Kage
-            if re.search(r'"(heroku\.)(\S+\":)', db):
-                logging.warning("Converting Heroku db to Kage")
-                db = re.sub(r"(heroku\.)(\S+\":)", lambda m: "kage." + m.group(2), db)
-            if re.search(r'"(legacy\.)(\S+\":)', db):
-                logging.warning("Converting db after update")
-                db = re.sub(r"(legacy\.)(\S+\":)", lambda m: "kage." + m.group(2), db)
+            migrated = migrate_legacy_db(db)
+            if migrated != db:
+                logging.warning("Converting Hikka/Heroku database to Kage")
+                db = migrated
             self._update_from_read(json.loads(db))
         except json.decoder.JSONDecodeError:
             logger.warning("Database read failed! Creating new one...")
@@ -358,6 +388,7 @@ class Database(dict):
         default: JSONSerializable | None = None,
     ) -> JSONSerializable:
         """Get database key"""
+        owner = _kage_owner(owner)
         try:
             return self[owner][key]
         except KeyError:
@@ -365,6 +396,7 @@ class Database(dict):
 
     def set(self, owner: str, key: str, value: JSONSerializable) -> bool:
         """Set database key"""
+        owner = _kage_owner(owner)
         if not utils.is_serializable(owner):
             raise RuntimeError(
                 "Attempted to write object to "
@@ -418,6 +450,7 @@ class Database(dict):
         item_type: typing.Any | None = None,
     ) -> JSONSerializable | PointerList | PointerDict:
         """Get a pointer to database key"""
+        owner = _kage_owner(owner)
         value = self._get_raw(owner, key, default)
         mapping = {
             list: PointerList,

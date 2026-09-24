@@ -175,8 +175,6 @@ Pipfile.lock
 
 kage.log.*
 unknown_errors.txt
-# Kage dev tooling
-.kage/node_modules
 
-# Kage: shipped images
+# images shipped in the repo
 !assets/**

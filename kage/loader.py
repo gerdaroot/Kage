@@ -158,7 +158,12 @@ IMPORT_PIP_ALIASES = {
     "markdown_it": "markdown-it-py",
 }
 
-USER_INSTALL = "PIP_TARGET" not in os.environ and "VIRTUAL_ENV" not in os.environ
+# pip refuses --user inside a venv (Docker's /opt/venv, install.sh's .venv even without VIRTUAL_ENV set)
+USER_INSTALL = (
+    "PIP_TARGET" not in os.environ
+    and "VIRTUAL_ENV" not in os.environ
+    and sys.prefix == sys.base_prefix
+)
 
 native_import = builtins.__import__
 _IMPORT_DEPTH = contextvars.ContextVar("_IMPORT_DEPTH", default=0)
@@ -178,10 +183,10 @@ def patched_import(name: str, *args, **kwargs):
                 return native_import("herokutl" + name[7:], *args, **kwargs)
             case s if s.startswith("hikkalls"):
                 return native_import(name, *args, **kwargs)
-            case s if s.startswith("hikka"):
+            case s if s == "hikka" or s.startswith("hikka."):
                 return native_import("kage" + name[5:], *args, **kwargs)
-            # modules written for Heroku (the fork Kage is based on)
-            case s if s.startswith("heroku") and not s.startswith("herokutl"):
+            # exact package only: "heroku3" (PyPI) must not become "kage3"
+            case s if s == "heroku" or s.startswith("heroku."):
                 return native_import("kage" + name[6:], *args, **kwargs)
 
         return native_import(name, *args, **kwargs)
@@ -190,6 +195,13 @@ def patched_import(name: str, *args, **kwargs):
 
 
 builtins.__import__ = patched_import
+
+# core modules were renamed HerokuX/HikkaX -> KageX
+_LEGACY_CORE_MODULE = re.compile(
+    r"^(?:heroku|hikka)"
+    r"(?=(?:info|security|backup|config|settings|web|accounts)(?:mod)?$)",
+    flags=re.IGNORECASE,
+)
 
 
 class InfiniteLoop:
@@ -986,6 +998,7 @@ class Modules:
         self,
         modname: str,
     ) -> bool | Module | Library:
+        modname = _LEGACY_CORE_MODULE.sub("Kage", modname)
         return next(
             (lib for lib in self.libraries if lib.name.lower() == modname.lower()),
             False,

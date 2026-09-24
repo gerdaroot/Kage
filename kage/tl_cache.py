@@ -71,11 +71,24 @@ def hashable(value: typing.Any) -> bool:
     return True
 
 
+def _alias_of(attribute: str) -> property:
+    return property(
+        lambda self: getattr(self, attribute, None),
+        lambda self, value: setattr(self, attribute, value),
+    )
+
+
 class CustomTelegramClient(TelegramClient):
-    # Modules written for Heroku / Hikka read these names; they point at the Kage ones
-    heroku_me = property(lambda self: getattr(self, "kage_me", None), lambda self, v: setattr(self, "kage_me", v))
-    heroku_db = property(lambda self: getattr(self, "kage_db", None), lambda self, v: setattr(self, "kage_db", v))
-    hikka_db = heroku_db
+    # Names used by modules written for Heroku / Hikka
+    heroku_me = _alias_of("kage_me")
+    heroku_db = hikka_db = _alias_of("kage_db")
+    heroku_inline = hikka_inline = _alias_of("kage_inline")
+    heroku_entity_cache = _heroku_entity_cache = _alias_of("_kage_entity_cache")
+    heroku_perms_cache = _heroku_perms_cache = _alias_of("_kage_perms_cache")
+    heroku_fullchannel_cache = _heroku_fullchannel_cache = _alias_of(
+        "_kage_fullchannel_cache"
+    )
+    heroku_fulluser_cache = _heroku_fulluser_cache = _alias_of("_kage_fulluser_cache")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

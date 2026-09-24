@@ -135,9 +135,8 @@ def get_app_name() -> str:
     return app_name
 
 
-# How Kage introduces itself to Telegram: honestly and identically on every start.
-# A session whose device/OS changes between restarts, or that poses as an official
-# app, looks hijacked to Telegram's anti-fraud and can get all sessions terminated.
+# Honest and identical on every start: a session whose device/OS changes between
+# restarts, or that poses as an official app, looks hijacked to Telegram's anti-fraud.
 DEVICE_MODEL = "Kage Userbot"
 
 
@@ -572,6 +571,21 @@ class Kage:
 
     def _migrate_sessions(self):
         os.makedirs(SESSIONS_DIR, exist_ok=True)
+
+        # sessions copied over from Heroku/Hikka: heroku-<id>.session -> kage-<id>.session
+        for folder in (BASE_DIR, SESSIONS_DIR):
+            with os.scandir(folder) as entries:
+                old_sessions = [
+                    entry
+                    for entry in entries
+                    if entry.is_file()
+                    and entry.name.startswith(("heroku-", "hikka-"))
+                    and ".session" in entry.name
+                ]
+            for entry in old_sessions:
+                target = os.path.join(folder, "kage-" + entry.name.split("-", 1)[1])
+                if not os.path.exists(target):
+                    os.rename(entry.path, target)
 
         with os.scandir(BASE_DIR) as entries:
             legacy = [
@@ -1241,3 +1255,4 @@ class Kage:
 
 
 kage = Kage()
+heroku = hikka = kage  # modules written for Heroku/Hikka reference main.heroku

@@ -1,9 +1,12 @@
+import html
 import logging
+import re
 import typing
 
 from herokutl.tl import types
 
 KageReplyMarkup = typing.Union[list[list[dict]], list[dict], dict]
+HerokuReplyMarkup = HikkaReplyMarkup = KageReplyMarkup  # Heroku/Hikka module compatibility
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +245,9 @@ class _CallbackMixin:
         alert: bool | None = None,
         **kwargs,
     ):
+        if text:
+            # toasts/alerts are plain text: translated strings carry HTML (<b>, <code>...)
+            text = html.unescape(re.sub(r"<[^>]+>", "", text))
         return await self.original_call.answer(
             text,
             alert=show_alert if alert is None else alert,

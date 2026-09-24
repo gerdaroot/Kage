@@ -114,7 +114,7 @@ def get_platform_emoji() -> str:
     :return: Emoji entity in string
     """
 
-    # Kage wordmark: animated black heart + name (same on every platform)
+    # the same wordmark on every platform
     return "<tg-emoji emoji-id=5449692618151695997>🖤</tg-emoji> <b>Kage</b>"
 
 

@@ -26,6 +26,7 @@ from pathlib import Path
 from herokutl.tl.types import Message
 
 from .. import loader, utils
+from ..database import migrate_legacy_db
 from ..inline.types import BotInlineCall
 
 logger = logging.getLogger(__name__)
@@ -223,7 +224,7 @@ class KageBackupMod(loader.Module):
             zipfile_bytes = io.BytesIO(file)
             with zipfile.ZipFile(zipfile_bytes) as zf:
                 with zf.open("db.json") as f:
-                    db_data = orjson.loads(f.read().decode())
+                    db_data = orjson.loads(migrate_legacy_db(f.read().decode()))
 
                 with contextlib.suppress(KeyError):
                     db_data["kage.inline"].pop("bot_token")
@@ -263,7 +264,7 @@ class KageBackupMod(loader.Module):
             )
 
     def _convert(self, backup):
-        fixed = re.sub(r"(hikka\.)(\S+\":)", lambda m: "kage." + m.group(2), backup)
+        fixed = migrate_legacy_db(backup)
         txt = io.BytesIO(fixed.encode())
         txt.name = f"db-converted-{datetime.datetime.now():%d-%m-%Y-%H-%M}.json"
         return txt
@@ -334,8 +335,7 @@ class KageBackupMod(loader.Module):
 
         file = await reply.download_media(bytes)
         try:
-
-            decoded_text = orjson.loads(file.decode())
+            decoded_text = orjson.loads(migrate_legacy_db(file.decode()))
 
         except UnicodeDecodeError:
             await utils.answer(
@@ -569,7 +569,7 @@ class KageBackupMod(loader.Module):
             zipfile_bytes = io.BytesIO(file)
             with zipfile.ZipFile(zipfile_bytes) as zf:
                 with zf.open("db.json") as f:
-                    db_data = orjson.loads(f.read().decode())
+                    db_data = orjson.loads(migrate_legacy_db(f.read().decode()))
 
                 with contextlib.suppress(KeyError):
                     db_data["kage.inline"].pop("bot_token")

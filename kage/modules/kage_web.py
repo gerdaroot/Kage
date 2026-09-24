@@ -36,7 +36,6 @@ from ..loader import LOADED_MODULES_PATH
 from .._internal import restart
 from ..inline.types import InlineCall
 from ..tl_cache import CustomTelegramClient
-from ..version import __version__
 
 logger = logging.getLogger(__name__)
 

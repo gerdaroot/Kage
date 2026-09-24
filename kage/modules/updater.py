@@ -340,11 +340,6 @@ class UpdaterMod(loader.Module):
         """Shows the changelog of the last major update"""
         with open("CHANGELOG.md", encoding="utf-8") as f:
             changelog = f.read().split("##")[1].strip()
-        if (await self._client.get_me()).premium:
-            changelog.replace(
-                "🖤 Kage",
-                "<tg-emoji emoji-id=5192765204898783881>🌘</tg-emoji><tg-emoji emoji-id=5195311729663286630>🌘</tg-emoji><tg-emoji emoji-id=5195045669324201904>🌘</tg-emoji>",
-            )
 
         await utils.answer(message, self.strings["changelog"].format(changelog))
 
@@ -543,7 +538,7 @@ class UpdaterMod(loader.Module):
                         os.path.dirname(utils.get_base_dir()),
                         "requirements.txt",
                     ),
-                    "--user",
+                    *(["--user"] if loader.USER_INSTALL else []),
                 ],
                 check=True,
                 timeout=600,
@@ -770,8 +765,7 @@ class UpdaterMod(loader.Module):
                                     None,
                                     ignore_migrated=True,
                                 )
-                                if "kage" in dialog.name
-                                or "Kage" in dialog.name
+                                if "kage" in dialog.name.lower()
                                 and dialog.is_channel
                                 or (
                                     self._client.loader.inline.init_complete
