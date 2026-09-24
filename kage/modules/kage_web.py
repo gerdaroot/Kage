@@ -144,9 +144,9 @@ class KageWebMod(loader.Module):
             connection=main.kage.conn,
             proxy=main.kage.proxy,
             connection_retries=None,
-            device_model=main.get_app_name(),
-            system_version="Windows 10",
-            app_version=".".join(map(str, __version__)) + " x64",
+            device_model=main.DEVICE_MODEL,
+            system_version=main.get_system_version(),
+            app_version=main.get_app_version(),
             lang_code="en",
             system_lang_code="en-US",
         )

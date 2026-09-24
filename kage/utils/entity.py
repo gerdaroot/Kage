@@ -482,12 +482,12 @@ async def set_avatar(
     :return: True if avatar was set, False otherwise
     """
     if isinstance(avatar, str) and check_url(avatar):
-        f = (
-            await run_sync(
-                requests.get,
-                avatar,
-            )
-        ).content
+        response = await run_sync(requests.get, avatar)
+        # a 404 page uploaded as a photo crashes startup with PhotoCropSizeSmallError
+        if not response.ok or not response.headers.get("content-type", "").startswith("image/"):
+            logger.warning("Avatar %s is unavailable (%s), skipping", avatar, response.status_code)
+            return False
+        f = response.content
     elif isinstance(avatar, bytes):
         f = avatar
     else:

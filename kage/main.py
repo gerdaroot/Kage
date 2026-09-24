@@ -21,6 +21,7 @@ import importlib
 import json
 import logging
 import os
+import platform as host_platform
 import random
 import shutil
 import signal
@@ -132,6 +133,21 @@ def get_app_name() -> str:
         save_config_key("app_name", app_name)
 
     return app_name
+
+
+# How Kage introduces itself to Telegram: honestly and identically on every start.
+# A session whose device/OS changes between restarts, or that poses as an official
+# app, looks hijacked to Telegram's anti-fraud and can get all sessions terminated.
+DEVICE_MODEL = "Kage Userbot"
+
+
+def get_system_version() -> str:
+    """Real host OS, e.g. "Linux 6.10.14" — stable across restarts"""
+    return f"{host_platform.system()} {host_platform.release()}".strip() or "Linux"
+
+
+def get_app_version() -> str:
+    return "Kage " + ".".join(map(str, __version__))
 
 
 def generate_random_system_version():
@@ -804,9 +820,9 @@ class Kage:
             connection=self.conn,
             proxy=self.proxy,
             connection_retries=None,
-            device_model=get_app_name(),
-            system_version=generate_random_system_version(),
-            app_version=".".join(map(str, __version__)) + " x64",
+            device_model=DEVICE_MODEL,
+            system_version=get_system_version(),
+            app_version=get_app_version(),
             lang_code="en",
             system_lang_code="en-US",
         )
@@ -928,9 +944,9 @@ class Kage:
                     connection=self.conn,
                     proxy=self.proxy,
                     connection_retries=None,
-                    device_model=get_app_name(),
-                    system_version=generate_random_system_version(),
-                    app_version=".".join(map(str, __version__)) + " x64",
+                    device_model=DEVICE_MODEL,
+                    system_version=get_system_version(),
+                    app_version=get_app_version(),
                     lang_code="en",
                     system_lang_code="en-US",
                 )
