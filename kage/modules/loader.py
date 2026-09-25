@@ -86,7 +86,7 @@ class LoaderMod(loader.Module):
             ),
             loader.ConfigValue(
                 "ADDITIONAL_REPOS",
-                [],
+                ["https://raw.githubusercontent.com/gerdaroot/kage-modules/main"],
                 lambda: self.strings["add_repo_config_doc"],
                 validator=loader.validators.Series(validator=loader.validators.Link()),
             ),
