@@ -64,7 +64,7 @@ from .qr import QRCode
 from .secure import patcher
 from .tl_cache import CustomTelegramClient
 from .translations import Translator
-from .version import __version__
+from .version import __version__, kage_version  # noqa: F401
 
 BASE_DIR = (
     "/data"
@@ -146,7 +146,7 @@ def get_system_version() -> str:
 
 
 def get_app_version() -> str:
-    return "Kage " + ".".join(map(str, __version__))
+    return f"Kage {kage_version}"
 
 
 def generate_random_system_version():
@@ -1039,14 +1039,14 @@ class Kage:
                 r"           |___/      "
                 "\n\n"
                 f"• Build: {build[:7]}\n"
-                f"• Version: {'.'.join(list(map(str, list(__version__))))}\n"
+                f"• Version: {kage_version}\n"
                 f"• {upd}\n"
             )
             if not self.omit_log:
                 print(logo)
                 logging.debug(
                     "\n🖤 Kage %s #%s (%s) started",
-                    ".".join(list(map(str, list(__version__)))),
+                    kage_version,
                     build[:7],
                     upd,
                 )
@@ -1075,7 +1075,7 @@ class Kage:
                             if client.kage_me.premium is True
                             else "🖤 Kage"
                         ),
-                        ".".join(list(map(str, list(__version__)))),
+                        kage_version,
                         build,
                         build[:7],
                         upd,

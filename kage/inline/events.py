@@ -340,15 +340,11 @@ class Events(InlineUnit):
         if not query:
             return
 
-        for unit_id, unit in self._units.items():
-            if (
-                unit_id == query
-                and "future" in unit
-                and isinstance(unit["future"], Event)
-            ):
-                unit["inline_message_id"] = chosen_inline_query.msg_id
-                unit["future"].set()
-                return
+        unit = self._units.get(query)
+        if unit is not None and "future" in unit and isinstance(unit["future"], Event):
+            unit["inline_message_id"] = chosen_inline_query.msg_id
+            unit["future"].set()
+            return
 
         for unit_id, unit in self._units.copy().items():
             for button in utils.array_sum(unit.get("buttons", [])):

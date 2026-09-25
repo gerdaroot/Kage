@@ -110,7 +110,7 @@ class CoreMod(loader.Module):
                     if self._client.kage_me.premium
                     else "🖤 <b>Kage userbot</b>"
                 ),
-                *version.__version__,
+                *version.__kage_version__,
                 utils.get_commit_url(),
                 f"{herokutl.__version__} #{herokutl.tl.alltlobjects.LAYER}",
             )

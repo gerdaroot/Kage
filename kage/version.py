@@ -12,7 +12,11 @@
 # You can redistribute it and/or modify it under the terms of the GNU AGPLv3
 # 🔑 https://www.gnu.org/licenses/agpl-3.0.html
 
+# __version__ is the Heroku API level that `heroku_min` scopes and third-party
+# modules check against; Kage's own release number is __kage_version__.
 __version__ = (2, 1, 0)
+__kage_version__ = (1, 0, 0)
+kage_version = ".".join(map(str, __kage_version__))
 
 import os
 

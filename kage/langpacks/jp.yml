@@ -485,7 +485,7 @@ updater:
   rollback_too_far: "<tg-emoji emoji-id=5210952531676504517>🚫</tg-emoji> <b>ロールバックしすぎています！</b>"
   rollback_confirm: "<tg-emoji emoji-id=5382187118216879236>❓</tg-emoji> <b>本当に {num} コミット分ロールバックしますか？</b>"
   rollback_process: "<tg-emoji emoji-id=5873204392429096339>🕗</tg-emoji> <b>{num} コミット分ロールバックしています...</b>"
-  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> 新しい Kage アップデート！\n\n🔮 新しい Kage バージョン #{} が利用可能です\n\n<i>アップデート変更履歴</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>アップデート中...</b>"
+  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> 新しい Kage アップデート！\n\n🔮 新しい Kage バージョン {} が利用可能です\n\n<i>アップデート変更履歴</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>アップデート中...</b>"
   autoupdate: "🛡 Unit Alpha では、アップデートを無視して<b>自動的に行う</b>こともできます！\n\n💫 ただし、グローバルバージョンの変更（1.x.x -> 2.x.x）などのメジャーアップデートは自動アップデートでは無視されるため、手動でアップデートする必要があります"
   autoupdate_on: "🎆 自動アップデートが<b>有効になりました！\nご利用をお楽しみください！</b>"
   autoupdate_off: "❌ 自動アップデートが<b>無効になりました！</b>\n有効にするには、コマンド <code>{prefix}autoupdate</code> を使用してください"
@@ -502,10 +502,10 @@ updater:
   latest_disabled: "最新のアップデートに関する通知は抑制されました"
   update: "🔄 アップデート"
   ignore: "🚫 無視"
-  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>最後のメジャーアップデートの変更履歴:</b><blockquote expandable>{}</blockquote>'
+  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>最新の Kage リリース:</b><blockquote expandable>{}</blockquote>'
 
   _cmd_doc_autoupdate: 自動更新を切り替え
-  _cmd_doc_changelog: 最後のメジャーアップデートの changelog を表示
+  _cmd_doc_changelog: 最新の Kage リリースの changelog を表示
   _cmd_doc_ubstop: ユーザーボットを停止
 api_protection:
   name: "APILimiter"

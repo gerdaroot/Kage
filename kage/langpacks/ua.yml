@@ -470,7 +470,7 @@ updater:
   rollback_too_far: "<tg-emoji emoji-id=5210952531676504517>🚫</tg-emoji> <b>Ви відкочуєтесь занадто далеко!</b>"
   rollback_confirm: "<tg-emoji emoji-id=5382187118216879236>❓</tg-emoji> <b>Ви впевнені, що хочете відкотити {num} коміт (-а, -ів)?</b>"
   rollback_process: "<tg-emoji emoji-id=5873204392429096339>🕗</tg-emoji> <b>Відкот {num} коміт(-a,-ів)...</b>"
-  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Нова версія Kage!\n\n🔮 Нова версія Kage #{} доступна\n\n<i>Список змін оновлення</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Оновлюю...</b>"
+  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Нова версія Kage!\n\n🔮 Нова версія Kage {} доступна\n\n<i>Список змін оновлення</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Оновлюю...</b>"
   autoupdate: "🛡 Unit Alpha також дозволяє ігнорувати оновлення та <b>робити це автоматично</b>!\n\n💫 Однак великі оновлення, такі як зміна глобальної версії (1.x.x -> 2.x.x), будуть ігноруватися для автоматичних оновлень, і вам доведеться оновлюватися вручну"
   autoupdate_on: "🎆 Автоматичні оновлення <b>були увімкнені!\nПриємного користування!</b>"
   autoupdate_off: "❌ Автоматичні оновлення <b>були вимкнені!</b>\nЩоб їх увімкнути, використовуйте команду <code>{prefix}autoupdate</code>"
@@ -486,11 +486,11 @@ updater:
   latest_disabled: "Повідомлення про останнє оновлення було вимкнено"
   update: "🔄 Оновити"
   ignore: "🚫 Ігнорувати"
-  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Список змін останнього великого оновлення:</b><blockquote expandable>{}</blockquote>'
+  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Останній реліз Kage:</b><blockquote expandable>{}</blockquote>'
 
   name: Updater
   _cmd_doc_autoupdate: Перемкнути автооновлення
-  _cmd_doc_changelog: Показати changelog останнього великого оновлення
+  _cmd_doc_changelog: Показати changelog останнього релізу Kage
   _cmd_doc_ubstop: Зупинити юзербота
 api_protection:
   warning: "⚠️ <b>УВАГА!</b>\n\nАкаунт вийшов за ліміти запитів, зазначені в конфігурації. З метою запобігання флуду Telegram API, юзербот був <b>повністю заморожений</b> на {} секунд. Додаткова інформація прикріплена у файлі нижче. \n\nРекомендується звернутися по допомогу до <code>{prefix}support</code> групу!\n\nЯкщо ти вважаєш, що це запланована поведінка юзербота, просто почекай, доки закінчиться таймер, і наступного разу, коли заплануєш виконувати таку ресурсовитратну операцію, використовуй <code>{prefix}suspend_api_protect</code> &lt;час у секундах&gt;"

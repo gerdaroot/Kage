@@ -610,7 +610,7 @@ class CustomTelegramClient(TelegramClient):
     async def _topic_guesser(
         self,
         native_method: typing.Callable[..., typing.Awaitable[Message]],
-        stack: list[inspect.FrameInfo],
+        stack: list[inspect.FrameInfo] | None,
         *args,
         **kwargs,
     ):
@@ -622,6 +622,11 @@ class CustomTelegramClient(TelegramClient):
                 raise
 
             logger.debug("Topic deleted, trying to guess topic id")
+
+            # inspect.stack() costs milliseconds, so it is taken only on failure;
+            # the awaiting caller frames are still alive and visible from here
+            if stack is None:
+                stack = inspect.stack()
 
             topic = await self._find_topic_in_stack(args[0], stack)
 
@@ -637,7 +642,7 @@ class CustomTelegramClient(TelegramClient):
     async def send_file(self, *args, **kwargs) -> Message:
         return await self._topic_guesser(
             super().send_file,
-            inspect.stack(),
+            None,
             *args,
             **kwargs,
         )
@@ -645,7 +650,7 @@ class CustomTelegramClient(TelegramClient):
     async def send_message(self, *args, **kwargs) -> Message:
         return await self._topic_guesser(
             super().send_message,
-            inspect.stack(),
+            None,
             *args,
             **kwargs,
         )

@@ -485,7 +485,7 @@ updater:
   rollback_too_far: "<tg-emoji emoji-id=5210952531676504517>🚫</tg-emoji> <b>U'r3 r0ll1ng b4ck 2 f4r!</b>"
   rollback_confirm: "<tg-emoji emoji-id=5382187118216879236>❓</tg-emoji> <b>R u 5ur3 u w4n7 2 r0llb4ck {num} c0mm17(-5)?</b>"
   rollback_process: "<tg-emoji emoji-id=5873204392429096339>🕗</tg-emoji> <b>R0ll1ng {num} c0mm175 b4ck...</b>"
-  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> N3w K4g3 upd473!\n\n🔮 N3w K4g3 v3r #{} 15 4v41l4bl3\n\n<i>Upd473 ch4ng3l0g</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Upd471ng...</b>"
+  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> N3w K4g3 upd473!\n\n🔮 N3w K4g3 v3r {} 15 4v41l4bl3\n\n<i>Upd473 ch4ng3l0g</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Upd471ng...</b>"
   autoupdate: "🛡 Un17 4lph4 4l50 4ll0w5 u 2 1gn0r3 upd4735 & <b>d0 17 4u70m471c4lly</b>!\n\n💫 H0w3v3r, m4j0r upd4735 5uch 45 ch4ng1ng 7h3 gl0b4l v3r (1.x.x -> 2.x.x) w1ll b3 1gn0r3d 4 4u70 upd4735 & u w1ll h4v3 2 upd473 m4nu4lly"
   autoupdate_on: "🎆 4u70 upd4735 <b>h4v3 b33n 3n4bl3d!\n3nj0y u51ng 17!</b>"
   autoupdate_off: "❌ 4u70 upd4735 <b>h4v3 b33n d154bl3d!</b>\n2 3n4bl3 7h3m, u53 7h3 cmd <code>{prefix}autoupdate</code>"
@@ -502,10 +502,10 @@ updater:
   latest_disabled: "N071f1c4710n5 4b0u7 7h3 l47357 upd473 h4v3 b33n suppr3553d"
   update: "🔄 Upd473"
   ignore: "🚫 1gn0r3"
-  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Ch4ng3l0g 0f 7h3 l457 m4j0r upd473:</b><blockquote expandable>{}</blockquote>'
+  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>L4735t K4g3 r3l3453:</b><blockquote expandable>{}</blockquote>'
 
   _cmd_doc_autoupdate: 70ggl3 4u70m471c upd4735
-  _cmd_doc_changelog: 5h0w ch4ng3l0g 0f 7h3 l457 m4j0r upd473
+  _cmd_doc_changelog: 5h0w ch4ng3l0g 0f 7h3 l4735t K4g3 r3l3453
   _cmd_doc_ubstop: 570p y0ur u53rb07
 api_protection:
   name: "4P1L1m173r"

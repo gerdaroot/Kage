@@ -1024,7 +1024,7 @@ class Modules:
         default = "."
 
         if ent_id:
-            prefixes = self._db.get(key, "command_prefixes", {})
+            prefixes = self._db._get_raw(key, "command_prefixes", {})
             result = prefixes.get(str(ent_id), default)
         else:
             result = self._db.get(key, "command_prefix", default)
@@ -1038,7 +1038,7 @@ class Modules:
         default = "."
 
         prefixes = ()
-        prefixes += tuple(self._db.get(key, "command_prefixes", {}).values())
+        prefixes += tuple(self._db._get_raw(key, "command_prefixes", {}).values())
         prefixes += tuple(self._db.get(key, "command_prefix", default))
 
         return set(prefixes)
@@ -1112,14 +1112,16 @@ class Modules:
     def dispatch(self, _command: str) -> tuple[str, str | None]:
         """Dispatch command to appropriate module"""
 
+        def candidates():
+            # find_alias scans every command, so it runs only if cheaper lookups miss
+            yield _command
+            yield self.aliases.get(_command.lower())
+            yield self.find_alias(_command)
+
         resolved = next(
             (
                 (cmd, self.commands[cmd.split()[0].lower()])
-                for cmd in [
-                    _command,
-                    self.aliases.get(_command.lower()),
-                    self.find_alias(_command),
-                ]
+                for cmd in candidates()
                 if cmd and cmd.split()[0].lower() in self.commands
             ),
             (_command, None),
@@ -1130,8 +1132,10 @@ class Modules:
             return resolved
 
         try:
-            disabled_modules = self._db.get(main.__name__, "disabled_modules", [])
-            disabled_commands = self._db.get(main.__name__, "disabled_commands", {})
+            disabled_modules = self._db._get_raw(main.__name__, "disabled_modules", [])
+            disabled_commands = self._db._get_raw(
+                main.__name__, "disabled_commands", {}
+            )
         except Exception:
             disabled_modules = []
             disabled_commands = {}

@@ -103,7 +103,7 @@ class KageInfoMod(loader.Module):
             .replace("}", "")
         )
         build = utils.get_commit_url()
-        _version = f'<i>{".".join(list(map(str, list(version.__version__))))}</i>'
+        _version = f"<i>{version.kage_version}</i>"
         prefix = f"«<code>{utils.escape_html(self.get_prefix())}</code>»"
 
         platform = utils.get_named_platform()

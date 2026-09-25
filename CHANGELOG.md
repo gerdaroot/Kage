@@ -1,4 +1,42 @@
-# Heroku Changelog
+# Kage Changelog
+
+All notable changes to Kage are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and Kage uses
+[Semantic Versioning](https://semver.org/). Kage's version is separate from the
+Heroku module API level (2.1.0) that `heroku_min` checks compare against.
+
+## [1.0.0] - 2026-09-25
+
+First Kage release, forked from Heroku 2.1.0.
+
+### Added
+- Own semantic version, shown in `.info`, `.kage`, the startup banner, update notifications and the Telegram app version (`Kage 1.0.0`).
+- Update notifications show Kage versions (current → new) and the release notes of the new version.
+- Tagged releases: pushing `vX.Y.Z` publishes `ghcr.io/gerdaroot/kage:X.Y.Z` and a GitHub Release with the changelog.
+- Image assets (banners, avatar, status pictures) shipped in the repository; the inline bot gets a bundled avatar.
+- Prebuilt multi-arch Docker image (`ghcr.io/gerdaroot/kage`, amd64 and arm64).
+
+### Changed
+- Renamed the package from `heroku` to `kage`, with its own wordmark, black-heart emoji, terminal banner and logo.
+- Honest client identity: Kage introduces itself to Telegram as `Kage Userbot` with the real OS, stable across restarts.
+- Updates and announcements come only from `gerdaroot/Kage`.
+- Docker: code ships in the image, session and data live in a volume, the container runs as a non-root user.
+- Hardened installer, `docker.sh` and CI; the checkout token is no longer left in the image's `.git/config`.
+
+### Removed
+- Upstream remote control: forced joins to third-party chats and hardcoded foreign chat IDs.
+- Doxxing and spam modules from the default module presets.
+
+### Fixed
+- A missing avatar no longer crashes the first start.
+- A deleted log or content channel is recreated instead of breaking startup.
+- Module installs use the virtualenv's pip; module reloads no longer leave half-loaded state.
+
+---
+
+# Heroku history
+
+Changelog of the upstream [Heroku](https://github.com/coddrago/Heroku) userbot, kept for reference.
 ## 🪐 Heroku 2.1.0
 
  - fix security check in help

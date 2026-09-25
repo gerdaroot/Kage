@@ -92,6 +92,12 @@ parser = herokutl.utils.sanitize_parse_mode("html")
 logger = logging.getLogger(__name__)
 
 TAG_RE = re.compile(r"</?([a-zA-Z][a-zA-Z0-9\-]*)(?:\s[^<>]*)?>")
+_HTML_KEEP_EMOJI_RE = re.compile(
+    r"(<\/?a.*?>|<\/?b>|<\/?i>|<\/?u>|<\/?strong>|<\/?em>|<\/?code.*?>|<\/?strike>|<\/?del>|<\/?pre.*?>|<\/?blockquote.*?>)"
+)
+_HTML_RE = re.compile(
+    r"(<\/?a.*?>|<\/?b>|<\/?i>|<\/?u>|<\/?strong>|<\/?em>|<\/?code.*?>|<\/?strike>|<\/?del>|<\/?pre.*?>|<\/?emoji.*?>|<\/?blockquote.*?>)"
+)
 
 TELEGRAM_HTML_TAGS = {
     "strong",
@@ -162,10 +168,7 @@ def remove_emoji(text: str) -> str:
     Removes all emoji from text
     """
 
-    allchars = [str for str in text]
-    emoji_list = [c for c in allchars if c in emoji.EMOJI_DATA]
-    clean_text = "".join([str for str in text if not any(i in str for i in emoji_list)])
-    return clean_text
+    return "".join([char for char in text if char not in emoji.EMOJI_DATA])
 
 
 def remove_html(text: str, escape: bool = False, keep_emojis: bool = False) -> str:
@@ -177,15 +180,7 @@ def remove_html(text: str, escape: bool = False, keep_emojis: bool = False) -> s
     :return: Text without HTML
     """
     return (escape_html if escape else str)(
-        re.sub(
-            (
-                r"(<\/?a.*?>|<\/?b>|<\/?i>|<\/?u>|<\/?strong>|<\/?em>|<\/?code.*?>|<\/?strike>|<\/?del>|<\/?pre.*?>|<\/?blockquote.*?>)"
-                if keep_emojis
-                else r"(<\/?a.*?>|<\/?b>|<\/?i>|<\/?u>|<\/?strong>|<\/?em>|<\/?code.*?>|<\/?strike>|<\/?del>|<\/?pre.*?>|<\/?emoji.*?>|<\/?blockquote.*?>)"
-            ),
-            "",
-            text,
-        )
+        (_HTML_KEEP_EMOJI_RE if keep_emojis else _HTML_RE).sub("", text)
     )
 
 

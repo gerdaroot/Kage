@@ -59,6 +59,7 @@ _LEGACY_PREFIX = re.compile(r"(hikka\.|heroku\.|legacy\.)(\S+\":)")
 _LEGACY_CORE_MOD = re.compile(
     r'"(?:Hikka|Heroku)(Info|Security|Backup|Config|Settings|Web|Accounts)Mod"'
 )
+_IMMUTABLE_TYPES = frozenset({str, int, float, bool, type(None)})
 
 
 def _kage_owner(owner):
@@ -241,6 +242,11 @@ class Database(dict):
         if not utils.is_serializable(db):
             return False
 
+        self._drop_invalid_keys(db)
+        return True
+
+    def _drop_invalid_keys(self, db: dict) -> bool:
+        changed = False
         for key, value in db.copy().items():
             if not isinstance(key, (str, int)):
                 logger.warning(
@@ -253,6 +259,7 @@ class Database(dict):
                 # If value is not a dict (module values), drop it,
                 # otherwise it may cause problems
                 del db[key]
+                changed = True
                 logger.warning(
                     "DbAutoFix: Dropped key %s, because it is non-dict, but %s",
                     key,
@@ -263,6 +270,7 @@ class Database(dict):
             for subkey in value:
                 if not isinstance(subkey, (str, int)):
                     del db[key][subkey]
+                    changed = True
                     logger.warning(
                         (
                             "DbAutoFix: Dropped subkey %s of db key %s, because it is"
@@ -273,11 +281,17 @@ class Database(dict):
                     )
                     continue
 
-        return True
+        return changed
 
     def save(self) -> bool:
         """Save database"""
-        if not self.process_db_autofix(self):
+        # This dump is both the serializability check and the file payload
+        try:
+            serialized = json.dumps(self, indent=4)
+        except Exception:
+            serialized = None
+
+        if serialized is None:
             try:
                 rev = self._revisions.pop()
                 while not self.process_db_autofix(rev):
@@ -296,6 +310,9 @@ class Database(dict):
                 "Rewriting database to the last revision because new one destructed it"
             )
 
+        if self._drop_invalid_keys(self):
+            serialized = json.dumps(self, indent=4)
+
         if self._next_revision_call < time.time():
             self._revisions += [dict(self)]
             self._next_revision_call = time.time() + 3
@@ -309,7 +326,7 @@ class Database(dict):
             return True
 
         try:
-            self._db_file.write_text(json.dumps(self, indent=4))
+            self._db_file.write_text(serialized)
         except Exception:
             logger.exception("Database save failed!")
             return False
@@ -379,7 +396,10 @@ class Database(dict):
         default: JSONSerializable | None = None,
     ) -> JSONSerializable:
         """Get database key snapshot"""
-        return copy.deepcopy(self._get_raw(owner, key, default))
+        value = self._get_raw(owner, key, default)
+        if type(value) in _IMMUTABLE_TYPES:
+            return value
+        return copy.deepcopy(value)
 
     def _get_raw(
         self,

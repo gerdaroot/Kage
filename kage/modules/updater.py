@@ -18,6 +18,7 @@ import errno
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -47,6 +48,35 @@ NO_GIT = os.environ.get("KAGE_NO_GIT") == "1"
 
 os.environ["GIT_TERMINAL_PROMPT"] = "0"
 os.environ["GIT_ASKPASS"] = "echo"
+
+_RELEASE_HEADING = re.compile(r"^## \[(\d+\.\d+\.\d+)\].*", re.M)
+_SECTION_END = re.compile(r"^(?:#{1,2} |---)", re.M)
+# Photo captions are capped at 1024 characters, including the notification text
+_NOTES_LIMIT = 600
+
+
+def extract_release_notes(changelog: str, release: str | None = None) -> str:
+    """Returns the `## [X.Y.Z]` section of CHANGELOG.md for `release`, or the newest one"""
+    changelog = changelog.replace("\r\n", "\n")
+    for heading in _RELEASE_HEADING.finditer(changelog):
+        if release in {None, heading[1]}:
+            body = changelog[heading.end() :]
+            end = _SECTION_END.search(body)
+            return (heading[0] + body[: end.start() if end else None]).strip()
+    return ""
+
+
+def _format_release_notes(notes: str) -> str:
+    html = utils.escape_html(notes)
+    html = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", html)
+    html = re.sub(r"^## \[([^\]]+)\](.*)$", r"<b>Kage \1\2</b>", html, flags=re.M)
+    html = re.sub(r"^### (.+)$", r"<b>\1</b>", html, flags=re.M)
+    return re.sub(r"^- ", "• ", html, flags=re.M)
+
+
+def _release_label(release: tuple[int, ...] | None, sha: str) -> str:
+    name = ".".join(map(str, release)) if release else ""
+    return f"{name} #{sha[:7]}".strip(" #")
 
 
 @loader.tds
@@ -183,6 +213,55 @@ class UpdaterMod(loader.Module):
             self._log_git_poll_error(e)
             return False
 
+    @staticmethod
+    def _read_origin_file(path: str) -> str:
+        with git.Repo() as repo:
+            return repo.git.show(f"origin/{version.branch}:{path}")
+
+    def _get_origin_version(self, name: str) -> tuple[int, ...] | None:
+        try:
+            source = self._read_origin_file("kage/version.py")
+        except Exception:
+            return None
+        match = re.search(rf"^{re.escape(name)}\s*=\s*(\([^)]*\))", source, re.M)
+        if not match:
+            return None
+        try:
+            value = ast.literal_eval(match[1])
+        except (ValueError, SyntaxError):
+            return None
+        # a malformed remote version.py must not break the poller every minute
+        if isinstance(value, tuple) and value and all(isinstance(v, int) for v in value):
+            return value
+        return None
+
+    def _is_breaking_update(self, new_release: tuple[int, ...] | None) -> bool:
+        new_api = self._get_origin_version("__version__")
+        if not new_release or not new_api:
+            return True
+        return (
+            new_release[0] != version.__kage_version__[0]
+            or new_api[0] != version.__version__[0]
+        )
+
+    def _get_update_notes(
+        self,
+        new_release: tuple[int, ...] | None,
+        commits_changelog: str,
+    ) -> str:
+        if not new_release or new_release <= version.__kage_version__:
+            return commits_changelog
+        try:
+            changelog = self._read_origin_file("CHANGELOG.md")
+        except Exception:
+            return commits_changelog
+        notes = extract_release_notes(changelog, ".".join(map(str, new_release)))
+        if not notes:
+            return commits_changelog
+        if len(notes) > _NOTES_LIMIT:
+            notes = notes[:_NOTES_LIMIT].rsplit("\n", 1)[0] + "\n…"
+        return _format_release_notes(notes)
+
     def get_latest(self) -> str:
         if NO_GIT:
             return ""
@@ -243,42 +322,27 @@ class UpdaterMod(loader.Module):
             return
 
         if self._pending not in {current, self._notified}:
-            if not self.config["autoupdate"]:
+            new_release = self._get_origin_version("__kage_version__")
+            notes = self._get_update_notes(new_release, changelog)
+            new_label = _release_label(new_release, self._pending)
+            compare_url = "https://github.com/gerdaroot/Kage/compare/{}...{}".format(
+                current[:12],
+                self._pending[:12],
+            )
+
+            manual_update = not self.config["autoupdate"]
+            if not manual_update and self._is_breaking_update(new_release):
+                logger.info("Got a major update, updating manually")
                 manual_update = True
-            else:
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        r = await session.get(
-                            url=f"https://api.github.com/repos/gerdaroot/Kage/contents/kage/version.py?ref={version.branch}",
-                            headers={"Accept": "application/vnd.github.v3.raw"},
-                        )
-                        text = await r.text()
-
-                    new_version = ""
-                    for line in text.splitlines():
-                        if line.strip().startswith("__version__"):
-                            new_version = ast.literal_eval(line.split("=")[1])
-
-                    if version.__version__[0] == new_version[0]:
-                        manual_update = False
-                    else:
-                        logger.info("Got a major update, updating manually")
-                        manual_update = True
-                except Exception:
-                    manual_update = True
 
             if manual_update:
                 m = await self.inline.bot.send_photo(
                     self.tg_id,
                     "https://raw.githubusercontent.com/gerdaroot/Kage/master/assets/img/updated.png",
                     caption=self.strings["update_required"].format(
-                        current[:6],
-                        '<a href="https://github.com/gerdaroot/Kage/compare/{}...{}">{}</a>'.format(
-                            current[:12],
-                            self._pending[:12],
-                            self._pending[:6],
-                        ),
-                        changelog,
+                        _release_label(version.__kage_version__, current),
+                        f'<a href="{compare_url}">{new_label}</a>',
+                        notes,
                     ),
                     reply_markup=self._markup(),
                 )
@@ -295,13 +359,9 @@ class UpdaterMod(loader.Module):
                     self.tg_id,
                     "https://raw.githubusercontent.com/gerdaroot/Kage/master/assets/img/updated.png",
                     caption=self.strings["autoupdate_notifier"].format(
-                        self._pending[:6],
-                        changelog,
-                        '<a href="https://github.com/gerdaroot/Kage/compare/{}...{}">{}</a>'.format(
-                            current[:12],
-                            self._pending[:12],
-                            "🔎 diff",
-                        ),
+                        new_label,
+                        notes,
+                        f'<a href="{compare_url}">🔎 diff</a>',
                     ),
                 )
                 await self.invoke("update", "-f", peer=self.inline.bot_username)
@@ -337,11 +397,13 @@ class UpdaterMod(loader.Module):
 
     @loader.command()
     async def changelog(self, message: Message):
-        """Shows the changelog of the last major update"""
+        """Shows the changelog of the latest Kage release"""
         with open("CHANGELOG.md", encoding="utf-8") as f:
-            changelog = f.read().split("##")[1].strip()
+            notes = extract_release_notes(f.read())
 
-        await utils.answer(message, self.strings["changelog"].format(changelog))
+        await utils.answer(
+            message, self.strings["changelog"].format(_format_release_notes(notes))
+        )
 
     @loader.command()
     async def restart(self, message: Message):
@@ -569,7 +631,13 @@ class UpdaterMod(loader.Module):
                     message=message,
                     text=(
                         self.strings["update_confirm"].format(
-                            current, current[:8], upcoming, upcoming[:8]
+                            current,
+                            _release_label(version.__kage_version__, current),
+                            upcoming,
+                            _release_label(
+                                self._get_origin_version("__kage_version__"),
+                                upcoming,
+                            ),
                         )
                         if upcoming != current
                         else self.strings["no_update"]

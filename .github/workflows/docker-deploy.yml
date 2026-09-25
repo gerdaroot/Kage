@@ -1,9 +1,20 @@
+# Cutting a Kage release:
+#   1. Bump __kage_version__ in kage/version.py (leave __version__, the Heroku API level, alone
+#      unless the module API changed).
+#   2. Add a "## [X.Y.Z] - YYYY-MM-DD" section on top of CHANGELOG.md.
+#   3. git commit -am "Kage X.Y.Z" && git tag -a vX.Y.Z -m "Kage X.Y.Z" && git push --follow-tags
+#      (--follow-tags pushes only annotated tags, hence -a)
+# The tag build pushes ghcr.io/<owner>/kage:X.Y.Z and :latest, then publishes a GitHub Release
+# whose body is that CHANGELOG section. The tag must match kage/version.py or the build fails.
+
 name: Build Docker Image
 
 on:
   push:
     branches:
       - master
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
@@ -20,6 +31,25 @@ jobs:
         with:
           # the token would otherwise stay in the image's .git/config and break later `git pull`s
           persist-credentials: false
+
+      - name: Check tag matches kage/version.py
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(python3 -c 'import re; print(".".join(re.search(r"^__kage_version__ = \((\d+), (\d+), (\d+)\)", open("kage/version.py").read(), re.M).groups()))')
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match __kage_version__ $version"
+            exit 1
+          fi
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/kage
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long,prefix=
+            type=semver,pattern={{version}}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -40,8 +70,38 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/kage:latest
-            ghcr.io/${{ github.repository_owner }}/kage:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Extract release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tr -d '\r' < CHANGELOG.md | awk -v heading="## [$version]" '
+            found && /^(# |## |---)/ { exit }
+            index($0, heading) == 1 { found = 1; next }
+            found { print }
+          ' > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Kage ${GITHUB_REF_NAME#v}" --notes-file release-notes.md --verify-tag --repo "$GITHUB_REPOSITORY"

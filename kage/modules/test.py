@@ -22,7 +22,7 @@ from io import BytesIO
 from herokutl.tl.types import Message
 from herokutl.types import InputMediaWebPage
 
-from .. import loader, main, utils
+from .. import loader, utils, version
 from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
@@ -290,7 +290,7 @@ class TestMod(loader.Module):
         ghash = utils.get_git_hash()
 
         other = (
-            *main.__version__,
+            *version.__kage_version__,
             (
                 " <a"
                 f' href="https://github.com/gerdaroot/Kage/commit/{ghash}">@{ghash[:8]}</a>'

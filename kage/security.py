@@ -164,6 +164,7 @@ class SecurityManager:
         self._sgroups: dict[str, SecurityGroup] = {}
         self._rights_last_reload: float = 0.0
         self._rights_reload_interval: float = 1.0
+        self._cache_next_prune: float = 0.0
 
         self._any_admin = self.any_admin = db.get(__name__, "any_admin", False)
         self._default = self.default = db.get(__name__, "default", DEFAULT_PERMISSIONS)
@@ -177,6 +178,16 @@ class SecurityManager:
     def apply_sgroups(self, sgroups: dict[str, SecurityGroup]):
         """Apply security groups"""
         self._sgroups = sgroups
+
+    def _prune_cache(self):
+        """Drop expired chat/participant records, they are never read again"""
+        now = time.time()
+        if now < self._cache_next_prune:
+            return
+
+        self._cache_next_prune = now + 10 * 60
+        for key in [key for key, record in self._cache.items() if record["exp"] < now]:
+            del self._cache[key]
 
     def _reload_rights(self, *, force: bool = False):
         """
@@ -355,7 +366,7 @@ class SecurityManager:
             # every time he changes permissions. It doesn't
             # decrease security at all, bc user anyway can
             # access this attribute
-            config = self._db.get(__name__, "masks", {}).get(
+            config = self._db._get_raw(__name__, "masks", {}).get(
                 f"{func.__module__}.{func.__name__}",
                 getattr(func, "security", self._default),
             )
@@ -429,6 +440,7 @@ class SecurityManager:
         """
 
         self._reload_rights()
+        self._prune_cache()
 
         if not (config := self.get_flags(func)):
             return False
@@ -502,7 +514,7 @@ class SecurityManager:
         if user_id in self._owner:
             return True
 
-        if user_id in self._db.get(main.__name__, "blacklist_users", []):
+        if user_id in self._db._get_raw(main.__name__, "blacklist_users", []):
             return False
 
         if message is None:  # In case of checking inline query security map

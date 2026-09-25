@@ -485,7 +485,7 @@ updater:
   rollback_too_far: "<tg-emoji emoji-id=5210952531676504517>🚫</tg-emoji> <b>You'we wowwing back too faw!</b>"
   rollback_confirm: "<tg-emoji emoji-id=5382187118216879236>❓</tg-emoji> <b>Awe you suwe you want to wowwback {num} commit(-s)?</b>"
   rollback_process: "<tg-emoji emoji-id=5873204392429096339>🕗</tg-emoji> <b>Wowwing {num} commits back...</b>"
-  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Nyew Kage update!\n\n🔮 Nyew Kage vewsion #{} is avaiwabwe\n\n<i>Update changewog</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Updating...</b>"
+  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Nyew Kage update!\n\n🔮 Nyew Kage vewsion {} is avaiwabwe\n\n<i>Update changewog</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Updating...</b>"
   autoupdate: "🛡 Unit Awpha awso awwows you to ignyowe updates and <b>do it automaticawwy</b>!\n\n💫 Howevew, majow updates such as changing da gwobaw vewsion (1.x.x -> 2.x.x) wiww be ignyowed fow automatic updates and you wiww have to update manyuawwy"
   autoupdate_on: "🎆 Automatic updates <b>have been enyabwed!\nEnjoy using it!</b>"
   autoupdate_off: "❌ Automatic updates <b>have been disabwed!</b>\nTo enyabwe dem, use da command <code>{prefix}autoupdate</code>"
@@ -502,10 +502,10 @@ updater:
   latest_disabled: "Nyotifications about da watest update have been suppwessed"
   update: "🔄 Update"
   ignore: "🚫 Ignyowe"
-  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Changewog of da wast majow update:</b><blockquote expandable>{}</blockquote>'
+  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Watest Kage wewease:</b><blockquote expandable>{}</blockquote>'
 
   _cmd_doc_autoupdate: Toggwe automatic updates
-  _cmd_doc_changelog: Show changewog of the wast majow update
+  _cmd_doc_changelog: Show changewog of da watest Kage wewease
   _cmd_doc_ubstop: Stop youw usewbot
 api_protection:
   name: "APIWimitew"

@@ -88,6 +88,17 @@ ALL_TAGS = [
 ]
 
 
+def _get_tags(func: Callable) -> list[str]:
+    target = getattr(func, "__func__", func)
+    if inspect.isfunction(target):
+        # Tags live in the function __dict__; a missing-attribute getattr on a
+        # bound method is slow and this runs for every watcher on every message
+        attrs = target.__dict__
+        return [tag for tag in ALL_TAGS if attrs.get(tag, False)]
+
+    return [tag for tag in ALL_TAGS if getattr(func, tag, False)]
+
+
 def _decrement_ratelimit(delay, data, key, severity):
     def inner():
         data[key] = max(0, data[key] - severity)
@@ -211,18 +222,15 @@ class CommandDispatcher:
             res = []
 
             for line in text.split("\n"):
-                if (
-                    grep
-                    and grep in utils.remove_html(line)
-                    and (not ungrep or ungrep not in utils.remove_html(line))
-                ):
+                plain = utils.remove_html(line)
+                if grep and grep in plain and (not ungrep or ungrep not in plain):
                     res.append(
                         utils.remove_html(line, escape=True).replace(
                             grep, f"<u>{grep}</u>"
                         )
                     )
 
-                if not grep and ungrep and ungrep not in utils.remove_html(line):
+                if not grep and ungrep and ungrep not in plain:
                     res.append(utils.remove_html(line, escape=True))
 
             cont = (
@@ -275,7 +283,7 @@ class CommandDispatcher:
         if initiator == self._client.tg_id:
             prefix = main_prefix
         else:
-            prefix = self._db.get(main.__name__, "command_prefixes", {})
+            prefix = self._db._get_raw(main.__name__, "command_prefixes", {})
             prefix = prefix.get(str(initiator), main_prefix)
 
         message = utils.censor(event.message)
@@ -331,9 +339,9 @@ class CommandDispatcher:
         ):
             return False
 
-        blacklist_chats = self._db.get(main.__name__, "blacklist_chats", [])
-        whitelist_chats = self._db.get(main.__name__, "whitelist_chats", [])
-        whitelist_modules = self._db.get(main.__name__, "whitelist_modules", [])
+        blacklist_chats = self._db._get_raw(main.__name__, "blacklist_chats", [])
+        whitelist_chats = self._db._get_raw(main.__name__, "whitelist_chats", [])
+        whitelist_modules = self._db._get_raw(main.__name__, "whitelist_modules", [])
 
         if (chat_id := utils.get_chat_id(message)) in blacklist_chats or (
             whitelist_chats and chat_id not in whitelist_chats
@@ -366,11 +374,11 @@ class CommandDispatcher:
         elif (
             not event.is_private
             and not self._db.get(main.__name__, "no_nickname", False)
-            and command not in self._db.get(main.__name__, "nonickcmds", [])
-            and initiator not in self._db.get(main.__name__, "nonickusers", [])
+            and command not in self._db._get_raw(main.__name__, "nonickcmds", [])
+            and initiator not in self._db._get_raw(main.__name__, "nonickusers", [])
             and not self.security.check_tsec(initiator, command)
             and utils.get_chat_id(event)
-            not in self._db.get(main.__name__, "nonickchats", [])
+            not in self._db._get_raw(main.__name__, "nonickchats", [])
         ):
             return False
 
@@ -534,6 +542,10 @@ class CommandDispatcher:
         :param func: The function to handle.
         :return: The reason for the tag to fail.
         """
+        tags = _get_tags(func)
+        if not tags:
+            return None
+
         m = event if isinstance(event, Message) else getattr(event, "message", event)
 
         reverse_mapping = {
@@ -615,9 +627,8 @@ class CommandDispatcher:
                 else next(
                     (
                         tag
-                        for tag in ALL_TAGS
-                        if getattr(func, tag, False)
-                        and tag in reverse_mapping
+                        for tag in tags
+                        if tag in reverse_mapping
                         and not reverse_mapping[tag]()
                     ),
                     None,
@@ -632,17 +643,17 @@ class CommandDispatcher:
         """Handle all incoming messages"""
         message = utils.censor(getattr(event, "message", event))
 
-        blacklist_chats = self._db.get(main.__name__, "blacklist_chats", [])
-        whitelist_chats = self._db.get(main.__name__, "whitelist_chats", [])
-        whitelist_modules = self._db.get(main.__name__, "whitelist_modules", [])
+        blacklist_chats = self._db._get_raw(main.__name__, "blacklist_chats", [])
+        whitelist_chats = self._db._get_raw(main.__name__, "whitelist_chats", [])
+        whitelist_modules = self._db._get_raw(main.__name__, "whitelist_modules", [])
 
         if (chat_id := utils.get_chat_id(message)) in blacklist_chats or (
             whitelist_chats and chat_id not in whitelist_chats
         ):
             logger.debug("Message is blocklisted")
 
+        bl = self._db._get_raw(main.__name__, "disabled_watchers", {})
         for func in self._modules.watchers:
-            bl = self._db.get(main.__name__, "disabled_watchers", {})
             modname = str(func.__self__.__class__.strings["name"])
 
             if (

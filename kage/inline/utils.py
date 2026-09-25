@@ -45,6 +45,7 @@ TG_EMOJI_RE = re.compile(
     r"<tg-emoji\b[^>]*\bemoji-id\s*=\s*['\"]?\d+['\"]?[^>]*>(.*?)</tg-emoji>",
     flags=re.IGNORECASE | re.DOTALL,
 )
+EMOJI_TAG_RE = re.compile(r"</?emoji.*?>")
 
 
 class Utils(InlineUnit):
@@ -315,7 +316,7 @@ class Utils(InlineUnit):
         return reply_markup
 
     def sanitise_text(self: "InlineManager", text: str) -> str:
-        return re.sub(r"</?emoji.*?>", "", text)
+        return EMOJI_TAG_RE.sub("", text)
 
     async def _edit_unit(
         self: "InlineManager",

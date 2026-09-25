@@ -470,7 +470,7 @@ updater:
   rollback_too_far: "<tg-emoji emoji-id=5210952531676504517>🚫</tg-emoji> <b>Куда так далеко откатываешь!</b>"
   rollback_confirm: "<tg-emoji emoji-id=5382187118216879236>❓</tg-emoji> <b>Точно откатываем {num} коммит(-а,-ов)?</b>"
   rollback_process: "<tg-emoji emoji-id=5873204392429096339>🕗</tg-emoji> <b>Откатываю {num} коммитов...</b>"
-  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Обнова Kage!\n\n🔮 Версия #{} подлетела\n\n<i>Че нового</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Обновляю...</b>"
+  autoupdate_notifier: "<tg-emoji emoji-id=5361979468887893611>🆕</tg-emoji> Обнова Kage!\n\n🔮 Версия {} подлетела\n\n<i>Че нового</i>:\n<blockquote expandable>{}</blockquote>\n{}\n\n<b>Обновляю...</b>"
   autoupdate: "🛡 Unit Alpha умеет сам обновляться!\n\n💫 Но жирные обновы (1.х.х -> 2.х.х) скипаются, сам ручками делай"
   autoupdate_on: "🎆 Авто-апдейт <b>ВКЛЮЧЕН!\nКайфуй!</b>"
   autoupdate_off: "❌ Авто-апдейт <b>ВЫКЛЮЧЕН!</b>\nЮзай <code>{prefix}autoupdate</code> чтоб врубить"
@@ -481,7 +481,7 @@ updater:
   more: "\n<i><b>🎥 И еще {} штук...</b></i>"
   latest_disabled: "Уведомление о ласт обнове оффнуто"
   _cfg_doc_disable_notifications: "Оффнуть уведомления об обновах"
-  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Че было в жирной обнове:</b><blockquote expandable>{}</blockquote>'
+  changelog: '<tg-emoji emoji-id=5434144690511290129>📰</tg-emoji> <b>Че в последнем релизе:</b><blockquote expandable>{}</blockquote>'
   _cfg_doc_autoupdate: "💫 Авто-апдейт Kage"
   _cmd_doc_restart: "Ребутает юб"
   _cmd_doc_source: "Ссылка на гит"
@@ -490,7 +490,7 @@ updater:
 
   name: Updater
   _cmd_doc_autoupdate: Включить/выключить автоапдейты
-  _cmd_doc_changelog: Показать changelog последнего большого апдейта
+  _cmd_doc_changelog: Показать changelog последнего релиза
   _cmd_doc_ubstop: Остановить юзербота
 api_protection:
   warning: "⚠️ <b>ЭЭЭ СТОПЭ!</b>\n\nТы превысил лимиты запросов. Чтоб телега не дала спамбан, юзербот <b>ушел в фриз</b> на {} секунд. Инфа в файле. \n\nИди в <code>{prefix}support</code> поплачь!\n\nЕсли так и надо, жди таймер, а потом юзай <code>{prefix}suspend_api_protect</code> &lt;секунды&gt;"
