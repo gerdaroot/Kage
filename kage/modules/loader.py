@@ -15,6 +15,7 @@
 import ast
 import asyncio
 import contextlib
+import datetime
 import difflib
 import functools
 import importlib
@@ -40,7 +41,7 @@ from herokutl.tl.functions.channels import JoinChannelRequest
 from herokutl.tl.types import Channel, InputMediaWebPage
 
 from .. import loader, main, utils
-from .._local_storage import RemoteStorage
+from .._local_storage import RemoteStorage, source_sha256
 from ..inline.types import InlineCall
 from ..types import CoreOverwriteError, CoreUnloadError
 
@@ -59,9 +60,43 @@ MODULE_LOADING_FORBIDDEN = FakeOne()
 MODULE_LOADING_FAILED = 0
 MODULE_LOADING_SUCCESS = 1
 
+PINS_DB_KEY = "pinned_hashes"
+SHORT_HASH_LENGTH = 12
+# Leaves room for the prompt text and emoji markup inside Telegram's 4096-char message limit
+DIFF_PREVIEW_LIMIT = 2500
+DIFF_LINE_LIMIT = 160
+
 
 class ModuleInstallError(RuntimeError):
     """Raised when an external module install fails after download."""
+
+
+def summarize_source_diff(
+    old: str,
+    new: str,
+    limit: int = DIFF_PREVIEW_LIMIT,
+) -> tuple[int, int, str]:
+    """
+    Compares two module sources.
+    :return: (lines added, lines removed, HTML-escaped unified diff preview of at most `limit` chars)
+    """
+    diff = list(
+        difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=1)
+    )[2:]
+    added = sum(line.startswith("+") for line in diff)
+    removed = sum(line.startswith("-") for line in diff)
+
+    preview, used = [], 0
+    for index, line in enumerate(diff):
+        escaped = utils.escape_html(line[:DIFF_LINE_LIMIT])
+        if used + len(escaped) + 1 > limit:
+            preview.append(f"… +{len(diff) - index}")
+            break
+
+        preview.append(escaped)
+        used += len(escaped) + 1
+
+    return added, removed, "\n".join(preview)
 
 
 @loader.tds
@@ -70,12 +105,58 @@ class LoaderMod(loader.Module):
 
     strings = {
         "name": "Loader",
+        "pin_changed": (
+            "<tg-emoji emoji-id=5355133243773435190>⚠️</tg-emoji> <b>The source of this"
+            " module has changed since it was installed</b>\n<code>{url}</code>\n\n"
+            "🔒 <b>Pinned:</b> <code>{old}</code> ({installed})\n"
+            "🆕 <b>New:</b> <code>{new}</code>\n{diff}\n\n<b>Install the new version?</b>"
+        ),
+        "pin_diff": "➕ <b>{added}</b> / ➖ <b>{removed}</b> lines\n<pre>{preview}</pre>",
+        "pin_diff_whitespace": "<i>Only whitespace or line endings changed</i>",
+        "pin_diff_unavailable": "<i>The pinned source isn't available locally, no diff</i>",
+        "pin_btn_update": "✅ Update",
+        "pin_btn_cancel": "❌ Cancel",
+        "pins_header": "🔒 <b>Pinned modules</b> ({})\n\n",
+        "pin_line": "▫️ <b>{name}</b> <code>{sha}</code> · {date}\n{origin}",
+        "pin_local_file": "<i>local file</i>",
+        "no_pins": "🔓 <b>No pinned modules yet</b>",
+        "pin_mismatch_notify": (
+            "<tg-emoji emoji-id=5355133243773435190>⚠️</tg-emoji> <b>These modules were"
+            " not loaded: their source doesn't match the pinned hash</b>\n{}\n\n"
+            "<i>Reinstall with</i> <code>{}dlm &lt;url&gt;</code> <i>to review the"
+            " changes.</i>"
+        ),
+    }
+
+    strings_ru = {
+        "pin_changed": (
+            "<tg-emoji emoji-id=5355133243773435190>⚠️</tg-emoji> <b>Код модуля"
+            " изменился с момента установки</b>\n<code>{url}</code>\n\n"
+            "🔒 <b>Закреплён:</b> <code>{old}</code> ({installed})\n"
+            "🆕 <b>Новый:</b> <code>{new}</code>\n{diff}\n\n<b>Установить новую версию?</b>"
+        ),
+        "pin_diff": "➕ <b>{added}</b> / ➖ <b>{removed}</b> строк\n<pre>{preview}</pre>",
+        "pin_diff_whitespace": "<i>Изменились только пробелы или переводы строк</i>",
+        "pin_diff_unavailable": "<i>Закреплённый код недоступен локально, diff не показать</i>",
+        "pin_btn_update": "✅ Обновить",
+        "pin_btn_cancel": "❌ Отмена",
+        "pins_header": "🔒 <b>Закреплённые модули</b> ({})\n\n",
+        "pin_local_file": "<i>локальный файл</i>",
+        "no_pins": "🔓 <b>Закреплённых модулей пока нет</b>",
+        "pin_mismatch_notify": (
+            "<tg-emoji emoji-id=5355133243773435190>⚠️</tg-emoji> <b>Эти модули не"
+            " загружены: их код не совпадает с закреплённым хешем</b>\n{}\n\n"
+            "<i>Переустановите через</i> <code>{}dlm &lt;url&gt;</code><i>, чтобы"
+            " просмотреть изменения.</i>"
+        ),
+        "_cmd_doc_pins": "Показать закреплённые хеши модулей",
     }
 
     def __init__(self):
         self.fully_loaded = False
         self._links_cache = {}
         self._storage: RemoteStorage = None
+        self._pin_mismatches: list[str] = []
 
         self.config = loader.ModuleConfig(
             loader.ConfigValue(
@@ -131,7 +212,8 @@ class LoaderMod(loader.Module):
             )
         )
         logger.debug("Modules: %s", modules)
-        asyncio.ensure_future(self._storage.preload(modules))
+        pinned = {key: pin["sha256"] for key, pin in self._get_pins().items()}
+        asyncio.ensure_future(self._storage.preload(modules, pinned))
 
     async def client_ready(self):
         while not (settings := self.lookup("settings")):
@@ -205,6 +287,60 @@ class LoaderMod(loader.Module):
         if len(parts) >= 2:
             return f"{parts[0]}/{parts[1]}"
         return repo
+
+    def _get_pins(self) -> dict[str, dict]:
+        return self.get(PINS_DB_KEY, {})
+
+    def _pin_source(self, key: str, class_name: str, source: str):
+        """Pins `source` under `key` (module URL or class name for local files)."""
+        pins = dict(self._get_pins())
+        sha256 = source_sha256(source)
+        if pins.get(key, {}).get("sha256") == sha256:
+            return
+
+        pins[key] = {
+            "sha256": sha256,
+            "installed": datetime.datetime.now(datetime.timezone.utc).isoformat(
+                timespec="seconds"
+            ),
+            "name": class_name,
+        }
+        self.set(PINS_DB_KEY, pins)
+
+    def _unpin_classes(self, class_names: list[str]):
+        pins = self._get_pins()
+        kept = {
+            key: pin for key, pin in pins.items() if pin.get("name") not in class_names
+        }
+        if len(kept) != len(pins):
+            self.set(PINS_DB_KEY, kept)
+
+    @loader.command()
+    async def pins(self, message: Message):
+        """List pinned module hashes"""
+        if not (pins := self._get_pins()):
+            await utils.answer(message, self.strings["no_pins"])
+            return
+
+        lines = [
+            self.strings["pin_line"].format(
+                name=utils.escape_html(pin.get("name") or key),
+                sha=pin["sha256"][:SHORT_HASH_LENGTH],
+                date=utils.escape_html(pin.get("installed", "?")[:10]),
+                origin=(
+                    f"<code>{utils.escape_html(key)}</code>"
+                    if key.startswith("http")
+                    else self.strings["pin_local_file"]
+                ),
+            )
+            for key, pin in sorted(
+                pins.items(), key=lambda item: (item[1].get("name") or item[0]).lower()
+            )
+        ]
+        await utils.answer(
+            message,
+            self.strings["pins_header"].format(len(pins)) + "\n".join(lines),
+        )
 
     async def _check_pass(self, message: Message | InlineCall) -> bool:
         if self.lookup("LoaderRestrictor").get("passed", False):
@@ -447,12 +583,14 @@ class LoaderMod(loader.Module):
                     self.strings["installing"].format(module_name),
                 )
 
+            pin = self._get_pins().get(url)
             try:
                 r = await self._storage.fetch(
                     url,
                     auth=self.config["basic_auth"],
                     # no message = reloading saved modules on start; .dlm always downloads fresh
                     prefer_local=message is None,
+                    expected_sha256=pin["sha256"] if pin else None,
                 )
             except requests.exceptions.HTTPError as e:
                 logger.warning(
@@ -465,6 +603,11 @@ class LoaderMod(loader.Module):
                     await utils.answer(message, self.strings["no_module"])
 
                 return MODULE_LOADING_FAILED
+
+            if pin and source_sha256(r) != pin["sha256"]:
+                return await self._handle_changed_source(
+                    url, module_name, r, message, blob_link
+                )
 
             installed = await self.load_module(
                 r,
@@ -482,6 +625,92 @@ class LoaderMod(loader.Module):
         except Exception:
             logger.exception("Failed to install external module %s", module_name)
             return MODULE_LOADING_FAILED
+
+    async def _handle_changed_source(
+        self,
+        url: str,
+        module_name: str,
+        source: str,
+        message: Message | None,
+        blob_link: bool,
+    ) -> int:
+        if message is None:
+            logger.warning(
+                "Module %s doesn't match its pinned hash, not loading it."
+                " Reinstall it with .dlm to review the changes",
+                url,
+            )
+            self._pin_mismatches.append(url)
+            return MODULE_LOADING_FAILED
+
+        await self.inline.form(
+            self._format_update_prompt(url, source),
+            message,
+            reply_markup=[
+                {
+                    "text": self.strings["pin_btn_update"],
+                    "callback": self._inline__confirm_update,
+                    "args": (url, module_name, source, blob_link),
+                },
+                {"text": self.strings["pin_btn_cancel"], "action": "close"},
+            ],
+        )
+        return MODULE_LOADING_FORBIDDEN
+
+    def _format_update_prompt(self, url: str, source: str) -> str:
+        pin = self._get_pins()[url]
+        old_source = self._find_pinned_source(url, pin["sha256"])
+        if old_source is None:
+            diff = self.strings["pin_diff_unavailable"]
+        else:
+            added, removed, preview = summarize_source_diff(old_source, source)
+            diff = (
+                self.strings["pin_diff"].format(
+                    added=added, removed=removed, preview=preview
+                )
+                if preview
+                else self.strings["pin_diff_whitespace"]
+            )
+
+        return self.strings["pin_changed"].format(
+            url=utils.escape_html(url),
+            old=pin["sha256"][:SHORT_HASH_LENGTH],
+            new=source_sha256(source)[:SHORT_HASH_LENGTH],
+            installed=utils.escape_html(pin.get("installed", "?")[:10]),
+            diff=diff,
+        )
+
+    def _find_pinned_source(self, url: str, sha256: str) -> str | None:
+        for module in self.allmodules.modules:
+            if module.__origin__ != url:
+                continue
+
+            with contextlib.suppress(Exception):
+                source = inspect.getmodule(module).__loader__.get_source()
+                if source_sha256(source) == sha256:
+                    return source
+
+        return self._storage.fetch_cached(url, sha256)
+
+    async def _inline__confirm_update(
+        self,
+        call: InlineCall,
+        url: str,
+        module_name: str,
+        source: str,
+        blob_link: bool,
+    ):
+        if await self._check_pass(call):
+            return
+
+        await call.edit(
+            self.strings["installing"].format(utils.escape_html(module_name))
+        )
+        self._storage.store(url, source)
+        if await self.load_module(
+            source, call, module_name, url, blob_link=blob_link
+        ) and self.fully_loaded:
+            self.update_modules_in_db()
 
     async def _inline__load(
         self,
@@ -1102,6 +1331,12 @@ class LoaderMod(loader.Module):
 
             return False
 
+        self._pin_source(
+            origin if origin.startswith("http") else instance.__class__.__name__,
+            instance.__class__.__name__,
+            doc,
+        )
+
         instance.kage_meta_pic = next(
             (
                 line.replace(" ", "").split("#metapic:", maxsplit=1)[1]
@@ -1259,7 +1494,8 @@ class LoaderMod(loader.Module):
             developer = ""
 
         banner_kwargs = {}
-        if (
+        # load_module can be driven by an InlineCall, which has no document/web_preview
+        if isinstance(message, Message) and (
             self.config["show_banner"]
             and not subscribe_markup
             and not message.document
@@ -1504,6 +1740,7 @@ class LoaderMod(loader.Module):
                     if mod not in worked
                 },
             )
+            self._unpin_classes(worked)
 
         msg = (
             self.strings["unloaded"].format(
@@ -1625,6 +1862,7 @@ class LoaderMod(loader.Module):
 
     async def _inline__clearmodules(self, call: InlineCall):
         self.set("loaded_modules", {})
+        self.set(PINS_DB_KEY, {})
 
         for file in os.scandir(loader.LOADED_MODULES_DIR):
             try:
@@ -1648,6 +1886,7 @@ class LoaderMod(loader.Module):
                 await self.download_and_install(mod)
 
             self.update_modules_in_db()
+            await self._notify_pin_mismatches()
 
             aliases = {
                 alias: cmd
@@ -1661,6 +1900,24 @@ class LoaderMod(loader.Module):
 
         with contextlib.suppress(AttributeError):
             await self.lookup("Updater").full_restart_complete(self._secure_boot)
+
+    async def _notify_pin_mismatches(self):
+        if not self._pin_mismatches:
+            return
+
+        urls = "\n".join(
+            f"▫️ <code>{utils.escape_html(url)}</code>" for url in self._pin_mismatches
+        )
+        self._pin_mismatches = []
+        try:
+            await self.inline.bot.send_message(
+                self._client.tg_id,
+                self.strings["pin_mismatch_notify"].format(
+                    urls, utils.escape_html(self.get_prefix())
+                ),
+            )
+        except Exception:
+            logger.debug("Can't notify the owner about pin mismatches", exc_info=True)
 
     def flush_cache(self) -> int:
         """Flush the cache of links to modules"""

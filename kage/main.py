@@ -17,6 +17,7 @@ import asyncio
 import base64
 import binascii
 import collections
+import html
 import importlib
 import json
 import logging
@@ -28,6 +29,7 @@ import signal
 import sqlite3
 import string
 import sys
+import time
 import typing
 import zlib
 from getpass import getpass
@@ -57,7 +59,8 @@ from herokutl.tl.functions.account import GetPasswordRequest
 from herokutl.tl.functions.auth import CheckPasswordRequest
 from herokutl.tl.functions.contacts import UnblockRequest
 
-from . import database, loader, utils, version
+from . import database, loader, log, utils, version
+from ._health import HEARTBEAT_FILENAME, read_heartbeat, write_heartbeat
 from ._internal import print_banner, restart
 from .dispatcher import CommandDispatcher
 from .qr import QRCode
@@ -76,6 +79,13 @@ BASE_PATH = Path(BASE_DIR)
 CONFIG_PATH = BASE_PATH / "config.json"
 SESSIONS_DIR = os.path.join(BASE_DIR, "sessions")
 _CONFIG_CACHE: dict | None = None
+
+# Removed on clean shutdown, so finding it at startup means the last run crashed
+RUNNING_MARKER_FILENAME = ".running"
+HEARTBEAT_INTERVAL = 30
+OUTAGE_ALERT_THRESHOLD = 5 * 60
+CRASH_LOG_LINES = 15
+CRASH_LOG_CHARS = 3000
 _CONFIG_MTIME_NS: int | None = None
 
 # fmt: off
@@ -492,6 +502,23 @@ class SuperList(list):
             return [getattr(x, attr) for x in self]
 
 
+def _read_log_tail() -> str:
+    try:
+        with open(log.rotating_handler.baseFilename, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            f.seek(max(0, f.tell() - 16384))
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    return "\n".join(lines[-CRASH_LOG_LINES:])[-CRASH_LOG_CHARS:]
+
+
+def _format_timestamp(timestamp: float | None) -> str:
+    if not isinstance(timestamp, (int, float)):
+        return "unknown"
+    return time.strftime("%Y-%m-%d %H:%M:%S %Z", time.localtime(timestamp))
+
+
 class InteractiveAuthRequired(Exception):
     """Is being rased by Telethon, if phone is required"""
 
@@ -524,10 +551,44 @@ class Kage:
 
         self.clients = SuperList()
         self.ready = asyncio.Event()
+        self._clean_exit = False
+        self._monitor_task = None
+        self._crash_report = self._check_previous_run()
         self._migrate_sessions()
         self._read_sessions()
         self._get_api_token()
         self._get_proxy()
+
+    def _check_previous_run(self) -> str | None:
+        """Arms the running marker; returns alert text if the last run crashed"""
+        marker = BASE_PATH / RUNNING_MARKER_FILENAME
+        try:
+            # `restart()` sets this env var, it survives the exec into the new
+            # process and __main__ clears it only after importing this module
+            crashed = marker.exists() and "KAGE_DO_NOT_RESTART" not in os.environ
+            marker.write_text(str(time.time()))
+            return self._format_crash_report() if crashed else None
+        except Exception:
+            logging.debug("Crash detection failed", exc_info=True)
+            return None
+
+    @staticmethod
+    def _format_crash_report() -> str:
+        last_beat = read_heartbeat(BASE_PATH / HEARTBEAT_FILENAME) or {}
+        report = (
+            "⚠️ <b>Kage restarted after an unexpected stop</b>\n"
+            f"<b>Last seen alive:</b> {_format_timestamp(last_beat.get('ts'))}\n"
+            f"<b>Restarted at:</b> {_format_timestamp(time.time())}"
+        )
+        if log_tail := _read_log_tail():
+            report += f"\n\n<b>Last log lines:</b>\n<pre>{html.escape(log_tail)}</pre>"
+        return report
+
+    def _clear_running_marker(self):
+        try:
+            (BASE_PATH / RUNNING_MARKER_FILENAME).unlink(missing_ok=True)
+        except OSError:
+            logging.debug("Failed to remove running marker", exc_info=True)
 
     def _get_proxy(self):
         """
@@ -1093,6 +1154,56 @@ class Kage:
         except Exception:
             logging.exception("Badge error")
 
+    async def _send_alert(self, client: CustomTelegramClient, text: str):
+        """Sends a health alert to the owner's log chat via the inline bot"""
+        try:
+            logs_handler = logging.getLogger().handlers[0]
+            await client.kage_inline.bot.send_message(
+                logs_handler.get_logid_by_client(client.tg_id),
+                text,
+                message_thread_id=await logs_handler.get_logs_topic_id_by_client(
+                    client.tg_id
+                ),
+            )
+        except Exception:
+            logging.debug("Failed to send health alert", exc_info=True)
+
+    def _is_any_client_connected(self) -> bool:
+        try:
+            return any(client.is_connected() for client in self.clients)
+        except Exception:
+            return False
+
+    async def _report_outage(self, offline_since: float):
+        minutes = round((time.time() - offline_since) / 60)
+        text = (
+            f"⚠️ <b>Kage was disconnected from Telegram for ~{minutes} min</b>"
+            " and has reconnected.\n"
+            f"<b>Offline since:</b> {_format_timestamp(offline_since)}"
+        )
+        for client in self.clients:
+            await self._send_alert(client, text)
+
+    async def _monitor_health(self):
+        """Writes the heartbeat for the Docker healthcheck and reports long outages"""
+        heartbeat_path = BASE_PATH / HEARTBEAT_FILENAME
+        was_online = False
+        offline_since = None
+        while True:
+            try:
+                connected = self._is_any_client_connected()
+                write_heartbeat(heartbeat_path, connected)
+                if connected:
+                    outage = time.time() - (offline_since or time.time())
+                    if outage > OUTAGE_ALERT_THRESHOLD:
+                        await self._report_outage(offline_since)
+                    was_online, offline_since = True, None
+                elif was_online and offline_since is None:
+                    offline_since = time.time()
+            except Exception:
+                logging.debug("Health monitor iteration failed", exc_info=True)
+            await asyncio.sleep(HEARTBEAT_INTERVAL)
+
     async def _add_dispatcher(
         self,
         client: CustomTelegramClient,
@@ -1156,6 +1267,9 @@ class Kage:
 
         if first:
             await self._badge(client)
+            if self._crash_report:
+                report, self._crash_report = self._crash_report, None
+                await self._send_alert(client, report)
 
         await client.run_until_disconnected()
 
@@ -1168,6 +1282,8 @@ class Kage:
             not self.clients and not self.sessions or not await self._init_clients()
         ) and not await self._initial_setup():
             return
+
+        self._monitor_task = asyncio.ensure_future(self._monitor_health())
 
         self.loop.set_exception_handler(
             lambda _, x: logging.error(
@@ -1227,13 +1343,16 @@ class Kage:
                 task.cancel()
         self.loop.stop()
 
+    def _request_shutdown(self):
+        self._clean_exit = True
+        asyncio.create_task(self._shutdown_handler())
+
     def main(self):
         """Main entrypoint"""
         if sys.platform != "win32":
             try:
-                self.loop.add_signal_handler(
-                    signal.SIGINT, lambda: asyncio.create_task(self._shutdown_handler())
-                )
+                for sig in (signal.SIGINT, signal.SIGTERM):
+                    self.loop.add_signal_handler(sig, self._request_shutdown)
             except NotImplementedError:
                 logging.warning("Signal handlers not supported on this platform.")
         else:
@@ -1242,8 +1361,13 @@ class Kage:
         try:
             self.loop.run_until_complete(self._main())
         except KeyboardInterrupt:
+            self._clean_exit = True
             logging.info("KeyboardInterrupt received.")
             self.loop.run_until_complete(self._shutdown_handler())
+        except SystemExit:
+            # `restart()` and `die()` exit this way
+            self._clean_exit = True
+            raise
         except Exception as e:
             logging.exception("Unexpected exception in main loop: %s", e)
         finally:
@@ -1252,6 +1376,8 @@ class Kage:
                 self.loop.run_until_complete(self._shutdown_handler())
             except Exception:
                 pass
+            if self._clean_exit:
+                self._clear_running_marker()
 
 
 kage = Kage()

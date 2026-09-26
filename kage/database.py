@@ -55,7 +55,8 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-_LEGACY_PREFIX = re.compile(r"(hikka\.|heroku\.|legacy\.)(\S+\":)")
+# [^"\s]+ not \S+: in compact JSON a greedy match would swallow every later key
+_LEGACY_PREFIX = re.compile(r"(hikka\.|heroku\.|legacy\.)([^\"\s]+\":)")
 _LEGACY_CORE_MOD = re.compile(
     r'"(?:Hikka|Heroku)(Info|Security|Backup|Config|Settings|Web|Accounts)Mod"'
 )

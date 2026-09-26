@@ -156,6 +156,7 @@ IMPORT_PIP_ALIASES = {
     "pil": "Pillow",
     "herokutl": "Heroku-TL-New",
     "markdown_it": "markdown-it-py",
+    "dateutil": "python-dateutil",
 }
 
 # pip refuses --user inside a venv (Docker's /opt/venv, install.sh's .venv even without VIRTUAL_ENV set)

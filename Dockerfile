@@ -35,4 +35,10 @@ RUN pip install --no-cache-dir --no-warn-script-location -r requirements.txt
 COPY --chown=kage:kage . .
 
 VOLUME ["/data"]
+
+# The bot rewrites /data/.heartbeat every 30s while Telegram is connected.
+# The long start period covers the first interactive login.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=10m --retries=3 \
+    CMD ["python", "-m", "kage._health"]
+
 CMD ["python", "-m", "kage"]

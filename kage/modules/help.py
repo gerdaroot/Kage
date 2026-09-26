@@ -10,6 +10,7 @@
 # You can redistribute it and/or modify it under the terms of the GNU AGPLv3
 # 🔑 https://www.gnu.org/licenses/agpl-3.0.html
 
+import dataclasses
 import difflib
 import inspect
 import logging
@@ -21,6 +22,7 @@ from herokutl.types import InputMediaWebPage
 
 
 from .. import loader, utils
+from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,10 @@ CATEGORY_ORDER = (
 )
 
 MESSAGE_LIMIT = 4096
+MENU_PAGE_LIMIT = 3000
+# only guards against runaway docstrings, real first lines are far shorter
+MENU_DESC_LIMIT = 1000
+MENU_BUTTONS_PER_ROW = 2
 # descriptions are shortened step by step until the list fits into one message
 DESC_LENGTHS = (80, 50, 40, 32, 28, 24, 20)
 # Matches "<args> [opts] | description" and "[args] - description" docstrings
@@ -59,6 +65,14 @@ DOC_ARGS_RE = re.compile(r"^((?:[<\[(][^>\])]*[>\])]\s*)*)[|\-—–]\s*(.*)$")
 
 CommandInfo = tuple[str, str, str]
 ModuleCommands = tuple[str, list[CommandInfo]]
+MenuMarkup = list[list[dict]]
+
+
+@dataclasses.dataclass
+class HelpMenu:
+    sections: dict[str, list[ModuleCommands]]
+    is_restricted: bool
+    footer: str
 
 
 @loader.tds
@@ -86,6 +100,20 @@ class Help(loader.Module):
         ),
         "truncated": "… +{} more",
         "only_permitted": "<i>You have permissions to execute only these commands</i>",
+        "menu_stats": "Modules: {} · commands: {}",
+        "menu_hint": "<i>Pick a category below</i>",
+        "menu_back": "⬅️ Back",
+        "btn_cat_modules": "📦 Modules",
+        "btn_cat_security": "🛡 Security",
+        "btn_cat_settings": "⚙️ Settings",
+        "btn_cat_backups": "💾 Backups",
+        "btn_cat_updates": "🔄 Updates",
+        "btn_cat_info": "ℹ️ Info",
+        "btn_cat_accounts": "👥 Accounts",
+        "btn_cat_dev": "🧑‍💻 Developer",
+        "btn_cat_lang": "🌐 Translation",
+        "btn_cat_other": "🗂 Other",
+        "btn_cat_installed": "🧩 Installed modules",
     }
 
     strings_ru = {
@@ -108,6 +136,20 @@ class Help(loader.Module):
         ),
         "truncated": "… и ещё {}",
         "only_permitted": "<i>Вам доступны только эти команды</i>",
+        "menu_stats": "Модулей: {} · команд: {}",
+        "menu_hint": "<i>Выберите категорию ниже</i>",
+        "menu_back": "⬅️ Назад",
+        "btn_cat_modules": "📦 Модули",
+        "btn_cat_security": "🛡 Безопасность",
+        "btn_cat_settings": "⚙️ Настройки",
+        "btn_cat_backups": "💾 Бэкапы",
+        "btn_cat_updates": "🔄 Обновления",
+        "btn_cat_info": "ℹ️ Информация",
+        "btn_cat_accounts": "👥 Аккаунты",
+        "btn_cat_dev": "🧑‍💻 Разработчик",
+        "btn_cat_lang": "🌐 Перевод",
+        "btn_cat_other": "🗂 Прочие",
+        "btn_cat_installed": "🧩 Установленные модули",
     }
 
     strings_ua = {
@@ -130,6 +172,20 @@ class Help(loader.Module):
         ),
         "truncated": "… і ще {}",
         "only_permitted": "<i>Вам доступні лише ці команди</i>",
+        "menu_stats": "Модулів: {} · команд: {}",
+        "menu_hint": "<i>Оберіть категорію нижче</i>",
+        "menu_back": "⬅️ Назад",
+        "btn_cat_modules": "📦 Модулі",
+        "btn_cat_security": "🛡 Безпека",
+        "btn_cat_settings": "⚙️ Налаштування",
+        "btn_cat_backups": "💾 Бекапи",
+        "btn_cat_updates": "🔄 Оновлення",
+        "btn_cat_info": "ℹ️ Інформація",
+        "btn_cat_accounts": "👥 Акаунти",
+        "btn_cat_dev": "🧑‍💻 Розробник",
+        "btn_cat_lang": "🌐 Переклад",
+        "btn_cat_other": "🗂 Інші",
+        "btn_cat_installed": "🧩 Встановлені модулі",
     }
 
     strings_de = {
@@ -152,6 +208,20 @@ class Help(loader.Module):
         ),
         "truncated": "… und {} weitere",
         "only_permitted": "<i>Sie dürfen nur diese Befehle ausführen</i>",
+        "menu_stats": "Module: {} · Befehle: {}",
+        "menu_hint": "<i>Wähle unten eine Kategorie</i>",
+        "menu_back": "⬅️ Zurück",
+        "btn_cat_modules": "📦 Module",
+        "btn_cat_security": "🛡 Sicherheit",
+        "btn_cat_settings": "⚙️ Einstellungen",
+        "btn_cat_backups": "💾 Backups",
+        "btn_cat_updates": "🔄 Updates",
+        "btn_cat_info": "ℹ️ Info",
+        "btn_cat_accounts": "👥 Konten",
+        "btn_cat_dev": "🧑‍💻 Entwickler",
+        "btn_cat_lang": "🌐 Übersetzung",
+        "btn_cat_other": "🗂 Weitere",
+        "btn_cat_installed": "🧩 Installierte Module",
     }
 
     def __init__(self):
@@ -466,14 +536,20 @@ class Help(loader.Module):
 
         return sections, is_restricted
 
+    @staticmethod
+    def _shorten(description: str, desc_len: int) -> str:
+        if len(description) <= desc_len:
+            return description
+
+        cut = description[: desc_len - 1]
+        # cut at a word boundary unless that throws away most of the text
+        if (space := cut.rfind(" ")) > desc_len // 2:
+            cut = cut[:space]
+        return cut.rstrip(" ,.;:—-") + "…"
+
     def _format_command(self, command: CommandInfo, desc_len: int) -> str:
         name, args, description = command
-        if len(description) > desc_len:
-            cut = description[: desc_len - 1]
-            # cut at a word boundary unless that throws away most of the text
-            if (space := cut.rfind(" ")) > desc_len // 2:
-                cut = cut[:space]
-            description = cut.rstrip(" ,.;:—-") + "…"
+        description = self._shorten(description, desc_len)
 
         line = utils.escape_html(f"{self.get_prefix()}{name}")
         if args and desc_len > DESC_LENGTHS[-1]:
@@ -526,10 +602,13 @@ class Help(loader.Module):
         )
 
     @staticmethod
-    def _fits_message(text: str) -> bool:
+    def _plain_length(text: str) -> int:
         plain_text, _ = herokutl.extensions.html.parse(text)
         # Telegram counts the limit in UTF-16 code units of the parsed text
-        return len(plain_text.encode("utf-16-le")) // 2 <= MESSAGE_LIMIT
+        return len(plain_text.encode("utf-16-le")) // 2
+
+    def _fits_message(self, text: str) -> bool:
+        return self._plain_length(text) <= MESSAGE_LIMIT
 
     def _help_footer(self, force: bool) -> str:
         notes = []
@@ -549,6 +628,13 @@ class Help(loader.Module):
 
         return "".join(f"\n{note}" for note in notes)
 
+    def _help_header(self, is_restricted: bool) -> str:
+        return "{}{} {}\n".format(
+            f"{self.strings['only_permitted']}\n" if is_restricted else "",
+            self.config["desc_icon"],
+            self.strings["cmds_header"].format(utils.escape_html(self.get_prefix())),
+        )
+
     def _render_help(
         self,
         sections: dict[str, list[ModuleCommands]],
@@ -556,11 +642,7 @@ class Help(loader.Module):
         footer: str,
     ) -> str:
         prefix = utils.escape_html(self.get_prefix())
-        header = "{}{} {}\n".format(
-            f"{self.strings['only_permitted']}\n" if is_restricted else "",
-            self.config["desc_icon"],
-            self.strings["cmds_header"].format(prefix),
-        )
+        header = self._help_header(is_restricted)
 
         for desc_len in DESC_LENGTHS:
             text = header + self._render_sections(sections, desc_len) + footer
@@ -598,6 +680,157 @@ class Help(loader.Module):
             )
             remaining[last_category].pop()
             omitted += 1
+
+    def _render_menu_main(self, menu: HelpMenu) -> tuple[str, MenuMarkup]:
+        modules = [mod for mods in menu.sections.values() for mod in mods]
+        stats = self.strings["menu_stats"].format(
+            len(modules),
+            sum(len(commands) for _, commands in modules),
+        )
+        text = (
+            f"{self._help_header(menu.is_restricted)}{stats}\n"
+            f"{self.strings['menu_hint']}{menu.footer}"
+        )
+        buttons = [
+            {
+                "text": self.strings[f"btn_{category}"],
+                "callback": self._menu_category_page,
+                "args": (menu, category, 0),
+            }
+            for category in CATEGORY_ORDER
+            if menu.sections.get(category)
+        ]
+        markup = [
+            buttons[start : start + MENU_BUTTONS_PER_ROW]
+            for start in range(0, len(buttons), MENU_BUTTONS_PER_ROW)
+        ]
+        return text, markup
+
+    def _format_menu_command(self, command: CommandInfo) -> str:
+        name, args, description = command
+        line = f"<code>{utils.escape_html(self.get_prefix() + name)}</code>"
+        if args:
+            line += f" {utils.escape_html(args)}"
+        if description:
+            description = self._shorten(description, MENU_DESC_LIMIT)
+            line += f" — {utils.escape_html(description)}"
+
+        return line
+
+    def _paginate_category(
+        self,
+        category: str,
+        modules: list[ModuleCommands],
+    ) -> list[str]:
+        show_module_names = category == INSTALLED_CATEGORY
+        pages: list[str] = []
+        page_lines: list[str] = []
+        page_length = 0
+        for module_name, commands in modules:
+            title = (
+                f"<b>{utils.escape_html(module_name)}</b>" if show_module_names else ""
+            )
+            for position, command in enumerate(commands):
+                line = self._format_menu_command(command)
+                line_length = self._plain_length(line) + 1
+                if page_lines and page_length + line_length > MENU_PAGE_LIMIT:
+                    pages.append("\n".join(page_lines))
+                    page_lines, page_length = [], 0
+
+                # a module continued on the next page gets its title repeated
+                if title and (position == 0 or not page_lines):
+                    heading = f"\n{title}" if page_lines else title
+                    page_lines.append(heading)
+                    page_length += self._plain_length(heading) + 1
+
+                page_lines.append(line)
+                page_length += line_length
+
+        pages.append("\n".join(page_lines))
+        return pages
+
+    def _render_menu_category(
+        self,
+        menu: HelpMenu,
+        category: str,
+        page: int,
+    ) -> tuple[str, MenuMarkup]:
+        pages = self._paginate_category(category, menu.sections.get(category, []))
+        page = min(max(page, 0), len(pages) - 1)
+        text = (
+            f"{self.config['desc_icon']} <b>{self.strings[category]}</b>\n\n"
+            f"{pages[page]}"
+        )
+
+        markup: MenuMarkup = []
+        if len(pages) > 1:
+            markup.append(self._menu_pager(menu, category, page, len(pages)))
+        markup.append(
+            [
+                {
+                    "text": self.strings["menu_back"],
+                    "callback": self._menu_main_page,
+                    "args": (menu,),
+                }
+            ]
+        )
+        return text, markup
+
+    def _menu_pager(
+        self,
+        menu: HelpMenu,
+        category: str,
+        page: int,
+        page_count: int,
+    ) -> list[dict]:
+        def button(text: str, target: int) -> dict:
+            return {
+                "text": text,
+                "callback": self._menu_category_page,
+                "args": (menu, category, target),
+            }
+
+        row = [button("◀️", page - 1)] if page > 0 else []
+        row.append(button(f"{page + 1}/{page_count}", page))
+        if page < page_count - 1:
+            row.append(button("▶️", page + 1))
+
+        return row
+
+    async def _menu_main_page(self, call: InlineCall, menu: HelpMenu):
+        text, markup = self._render_menu_main(menu)
+        await call.edit(text, reply_markup=markup)
+
+    async def _menu_category_page(
+        self,
+        call: InlineCall,
+        menu: HelpMenu,
+        category: str,
+        page: int,
+    ):
+        text, markup = self._render_menu_category(menu, category, page)
+        await call.edit(text, reply_markup=markup)
+
+    async def _send_menu(self, message: Message, menu: HelpMenu) -> bool:
+        if not getattr(self.inline, "init_complete", False):
+            return False
+
+        text, markup = self._render_menu_main(menu)
+        try:
+            form = await self.inline.form(
+                text,
+                message=message,
+                reply_markup=markup,
+                # owners always pass; the caller is added so a permitted
+                # non-owner can browse their own menu, but nobody else can
+                force_me=True,
+                always_allow=[message.sender_id] if message.sender_id else [],
+            )
+        except Exception:
+            logger.debug("Can't send inline help menu", exc_info=True)
+            return False
+
+        return bool(form)
 
     @loader.command(
         ru_doc="[args] | Помощь с вашими модулями!",
@@ -649,9 +882,13 @@ class Help(loader.Module):
         if only_loaded:
             sections = {INSTALLED_CATEGORY: sections.get(INSTALLED_CATEGORY, [])}
 
+        footer = self._help_footer(force)
+        if await self._send_menu(message, HelpMenu(sections, is_restricted, footer)):
+            return
+
         await utils.answer(
             message,
-            self._render_help(sections, is_restricted, self._help_footer(force)),
+            self._render_help(sections, is_restricted, footer),
             file=banner,
             invert_media=self.config["invert_media"],
         )

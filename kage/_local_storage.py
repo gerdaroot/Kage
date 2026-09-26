@@ -30,6 +30,15 @@ MAX_FILESIZE = 1024 * 1024 * 5  # 5 MB
 MAX_TOTALSIZE = 1024 * 1024 * 100  # 100 MB
 
 
+def source_sha256(source: str) -> str:
+    """SHA-256 hex digest of a module's source code."""
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
+
+
+def _matches_pin(source: str, expected_sha256: str | None) -> bool:
+    return expected_sha256 is None or source_sha256(source) == expected_sha256
+
+
 class LocalStorage:
     """Saves modules to disk and fetches them if remote storage is not available."""
 
@@ -90,7 +99,8 @@ class LocalStorage:
         path = self._get_path(repo, module_name)
         previous_size = os.path.getsize(path) if os.path.isfile(path) else 0
 
-        with open(path, "w", encoding="utf-8") as f:
+        # newline="" keeps the bytes as downloaded, otherwise CRLF sources change their hash
+        with open(path, "w", encoding="utf-8", newline="") as f:
             f.write(module_code)
 
         self._tracked_total_size = self._total_size + size - previous_size
@@ -105,7 +115,7 @@ class LocalStorage:
         """
         path = self._get_path(repo, module_name)
         if os.path.isfile(path):
-            with open(path, encoding="utf-8") as f:
+            with open(path, encoding="utf-8", newline="") as f:
                 return f.read()
 
         return None
@@ -116,14 +126,19 @@ class RemoteStorage:
         self._local_storage = LocalStorage()
         self._client = client
 
-    async def preload(self, urls: list[str]):
-        """Preloads modules from remote storage."""
+    async def preload(self, urls: list[str], pinned: dict[str, str] | None = None):
+        """
+        Preloads modules from remote storage.
+        :param urls: Module URLs to cache.
+        :param pinned: URL -> pinned SHA-256; a changed remote copy won't replace the cached one.
+        """
         logger.debug("Preloading modules from remote storage.")
+        pinned = pinned or {}
         for url in urls:
             logger.debug("Preloading module %s", url)
 
             with contextlib.suppress(Exception):
-                await self.fetch(url)
+                await self.fetch(url, expected_sha256=pinned.get(url))
 
             await asyncio.sleep(5)
 
@@ -156,6 +171,7 @@ class RemoteStorage:
         url: str,
         auth: str | None = None,
         prefer_local: bool = False,
+        expected_sha256: str | None = None,
     ) -> str:
         """
         Fetches the module from the remote storage.
@@ -163,11 +179,20 @@ class RemoteStorage:
         :param auth: Optional authentication string in the format "username:password".
         :param prefer_local: Use the cached copy when there is one (restarts), so a changed
             remote file can't silently run new code on the account
+        :param expected_sha256: Pinned hash. A cached copy that doesn't match it is ignored,
+            and a downloaded copy that doesn't match it is returned but never cached
         :return: Module source code.
         """
         url, repo, module_name = self._parse_url(url)
-        if prefer_local and (module := self._local_storage.fetch(repo, module_name)):
-            return module
+        cached = self._local_storage.fetch(repo, module_name)
+        if cached is not None and not _matches_pin(cached, expected_sha256):
+            logger.warning(
+                "Cached copy of %s doesn't match its pinned hash, ignoring it", url
+            )
+            cached = None
+
+        if prefer_local and cached:
+            return cached
 
         try:
             r = await utils.run_sync(
@@ -181,12 +206,29 @@ class RemoteStorage:
                 "Can't load module from remote storage. Trying local storage.",
                 exc_info=True,
             )
-            if module := self._local_storage.fetch(repo, module_name):
+            if cached:
                 logger.debug("Module source loaded from local storage.")
-                return module
+                return cached
 
             raise
 
-        self._local_storage.save(repo, module_name, r.text)
+        if _matches_pin(r.text, expected_sha256):
+            self._local_storage.save(repo, module_name, r.text)
 
         return r.text
+
+    def fetch_cached(self, url: str, expected_sha256: str | None = None) -> str | None:
+        """
+        Returns the cached copy of the module without network access.
+        :param url: URL to the module.
+        :param expected_sha256: If set, a cached copy with another hash is treated as missing.
+        :return: Module source code or None.
+        """
+        _, repo, module_name = self._parse_url(url)
+        cached = self._local_storage.fetch(repo, module_name)
+        return cached if cached and _matches_pin(cached, expected_sha256) else None
+
+    def store(self, url: str, source: str):
+        """Caches a module source the owner has approved."""
+        _, repo, module_name = self._parse_url(url)
+        self._local_storage.save(repo, module_name, source)
