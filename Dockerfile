@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
         git \
         libcairo2 \
         libmagic1 \
+        neofetch \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # Unprivileged user; the venv is theirs so modules can `# requires:` extra packages at runtime

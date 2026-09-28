@@ -5,6 +5,7 @@ services:
     build:
       context: .
     container_name: kage
+    hostname: kage
     volumes:
       - kage-data:/data
     stop_signal: SIGINT
